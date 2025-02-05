@@ -1,0 +1,103 @@
+@use "sass:string";
+@use "../colors";
+@use "../lib";
+
+@function gtkalpha($c, $a) {
+  @return string.unquote("alpha(#{$c},#{$a})");
+}
+
+window.OSDWindow {
+  @include lib.unset;
+  background: transparent;
+}
+
+.OSD {
+  background-color: gtkalpha(colors.$surface0, 0.95);
+  border-radius: 200px;
+  border: 1px solid gtkalpha(colors.$border, 0.2);
+  box-shadow: 0 2px 30px 0 rgba(0, 0, 0, 0.4);
+  margin: 2rem 0;
+
+  .volume-indicator,
+  .volume-indicator-mute,
+  .mic-indicator,
+  .mic-indicator-mute {
+    padding: 0.75rem;
+    margin: 0.25rem;
+
+    .indicator {
+      icon {
+        margin-right: 0.5rem;
+        font-size: 20px;
+        color: colors.$text;
+      }
+
+      label {
+        color: colors.$text;
+        font-size: 1em;
+      }
+    }
+
+    .slider-container {
+      .volume-slider {
+        margin-left: 1rem;
+        margin-right: 1rem;
+
+        trough {
+          background-color: colors.$surfaceVariant;
+          border-radius: 1rem;
+        }
+
+        highlight {
+          background-color: colors.$primary;
+          min-height: 0.8rem;
+          border-radius: 1rem;
+        }
+
+        slider {
+          background-color: colors.$primary;
+          border-radius: 1rem;
+          min-height: 1.2rem;
+          min-width: 1.2rem;
+          margin: -0.2em;
+        }
+
+        & .muted {
+          highlight,
+          slider {
+            background-color: colors.$onSurfaceVariant;
+          }
+        }
+      }
+    }
+  }
+
+  .volume-indicator {
+    .indicator icon {
+      color: colors.$blue;
+    }
+  }
+
+  .mic-indicator {
+    .indicator icon {
+      color: colors.$red;
+    }
+  }
+
+  .volume-indicator-mute,
+  .mic-indicator-mute {
+    .indicator {
+      icon {
+        color: colors.$red;
+      }
+
+      label {
+        color: colors.$subtext1;
+      }
+    }
+
+    scale trough highlight {
+      background-color: colors.$overlay2;
+    }
+  }
+}

@@ -9,28 +9,36 @@ local timeout = astal.timeout
 local SHOW_TIMEOUT = 1500
 
 local function create_volume_indicator(device, class_name)
-  local progress = Gtk.ProgressBar()
-
   local box = Widget.Box({
     class_name = class_name,
     visible = false,
-    Widget.Icon({
-      icon = bind(device, "volume-icon"),
+    Widget.Box({
+      class_name = "indicator",
+      Widget.Icon({
+        icon = bind(device, "volume-icon"),
+      }),
+      Widget.Label({
+        label = bind(device, "volume"):as(function(vol)
+          return string.format("%d%%", math.floor((vol or 0) * 100))
+        end),
+      }),
     }),
     Widget.Box({
-      class_name = "progress-bar",
-      progress,
-    }),
-    Widget.Label({
-      label = bind(device, "volume"):as(function(vol)
-        return string.format("%d%%", math.floor((vol or 0) * 100))
-      end),
+      class_name = "slider-container",
+      css = "min-width: 140px;",
+      Widget.Slider({
+        class_name = "volume-slider",
+        hexpand = true,
+        on_dragged = function(self)
+          device.volume = self.value
+        end,
+        value = bind(device, "volume"),
+      }),
     }),
   })
 
   return {
     box = box,
-    progress = progress,
   }
 end
 
@@ -42,14 +50,12 @@ local function create_mute_indicator(device, class_name)
       icon = bind(device, "volume-icon"),
     }),
     Widget.Label({
-      label = bind(device, "mute"):as(function(muted)
-        return muted and "Muted" or "Unmuted"
-      end),
+      label = "Muted",
     }),
   })
 end
 
-local function OnScreenProgress()
+local function create_osd_widget()
   local speaker = Wp.get_default().audio.default_speaker
   local mic = Wp.get_default().audio.default_microphone
 
@@ -82,21 +88,27 @@ local function OnScreenProgress()
   end
 
   bind(speaker, "volume"):subscribe(function(vol)
-    speaker_vol.progress.fraction = vol or 0
     show_osd(speaker_vol.box)
   end)
 
   bind(speaker, "mute"):subscribe(function(muted)
-    show_osd(speaker_mute)
+    if muted then
+      show_osd(speaker_mute)
+    else
+      show_osd(speaker_vol.box)
+    end
   end)
 
   bind(mic, "volume"):subscribe(function(vol)
-    mic_vol.progress.fraction = vol or 0
     show_osd(mic_vol.box)
   end)
 
   bind(mic, "mute"):subscribe(function(muted)
-    show_osd(mic_mute)
+    if muted then
+      show_osd(mic_mute)
+    else
+      show_osd(mic_vol.box)
+    end
   end)
 
   return Widget.Box({
@@ -115,9 +127,9 @@ return function(gdkmonitor)
   return Widget.Window({
     class_name = "OSDWindow",
     gdkmonitor = gdkmonitor,
-    anchor = Anchor.CENTER,
+    anchor = Anchor.BOTTOM,
     Widget.Box({
-      OnScreenProgress(),
+      create_osd_widget(),
     }),
   })
 end

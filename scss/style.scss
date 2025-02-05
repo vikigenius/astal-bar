@@ -5,6 +5,7 @@
 /* @use "quick-settings.scss"; */
 @use "./windows/bar.scss";
 @use "./windows/notifications.scss";
+@use "./windows/OSD.scss";
 
 window {
   background-color: transparent;

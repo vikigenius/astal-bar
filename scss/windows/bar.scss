@@ -1,0 +1,13 @@
+@use "sass:color";
+@use "../colors";
+@use "../lib";
+
+.Bar {
+  @include lib.unset($rec: true);
+
+  > centerbox {
+    @include lib.window;
+    padding: 0.5rem;
+  }
+
+}

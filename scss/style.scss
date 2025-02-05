@@ -1,0 +1,17 @@
+@use "colors.scss";
+@use "lib.scss";
+/* @use "launcher.scss"; */
+/* @use "powermenu.scss"; */
+/* @use "quick-settings.scss"; */
+@use "./windows/bar.scss";
+@use "./windows/notifications.scss";
+
+window {
+  background-color: transparent;
+}
+
+tooltip {
+  background-color: colors.$bg;
+  border-radius: 1rem;
+  font-size: 1.2rem;
+}

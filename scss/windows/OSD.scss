@@ -45,13 +45,16 @@ window.OSDWindow {
 
         trough {
           background-color: colors.$surfaceVariant;
+          min-height: 1.2rem;
           border-radius: 1rem;
+          margin-left: 0.5rem;
         }
 
         highlight {
           background-color: colors.$primary;
           min-height: 0.8rem;
           border-radius: 1rem;
+          margin: 0 -1em;
         }
 
         slider {

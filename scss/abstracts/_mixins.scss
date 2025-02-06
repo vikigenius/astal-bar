@@ -8,11 +8,17 @@
 }
 
 @mixin unset($rec: false) {
-  all: unset;
+  background: none;
+  border: none;
+  padding: 0;
+  margin: 0;
 
   @if $rec {
     * {
-      all: unset;
+      background: none;
+      border: none;
+      padding: 0;
+      margin: 0;
     }
   }
 }

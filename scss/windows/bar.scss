@@ -1,6 +1,5 @@
 @use "sass:color";
-@use "../abstracts/colors" as *;
-@use "../abstracts/mixins" as *;
+@use "../abstracts" as *;
 @use "../widgets/active-client" as *;
 
 .Bar {

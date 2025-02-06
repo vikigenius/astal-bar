@@ -1,0 +1,8 @@
+@use "../abstracts/colors" as *;
+@use "../abstracts/functions" as *;
+
+tooltip {
+  background-color: $bg;
+  border-radius: 1rem;
+  font-size: to-rem(19px);
+}

@@ -1,18 +1,13 @@
-@use "colors.scss";
-@use "lib.scss";
-/* @use "launcher.scss"; */
-/* @use "powermenu.scss"; */
-/* @use "quick-settings.scss"; */
-@use "./windows/bar.scss";
-@use "./windows/notifications.scss";
-@use "./windows/OSD.scss";
+// Base
+@use "base/reset";
 
-window {
-  background-color: transparent;
-}
+// Components
+@use "components/tooltip";
 
-tooltip {
-  background-color: colors.$bg;
-  border-radius: 1rem;
-  font-size: 1.2rem;
-}
+// Windows
+@use "windows/bar";
+@use "windows/notifications";
+@use "windows/OSD";
+
+// Widgets
+@use "widgets/active-client";

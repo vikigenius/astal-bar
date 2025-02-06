@@ -1,0 +1,12 @@
+@use "../abstracts/functions" as *;
+
+@mixin ActiveClient {
+  .ActiveClient {
+    .app-id {
+      font-size: to-rem(12px);
+    }
+    .window-title{
+      font-size: to-rem(15px);
+    }
+  }
+}

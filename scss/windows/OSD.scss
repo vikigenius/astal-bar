@@ -1,20 +1,20 @@
 @use "sass:string";
-@use "../colors";
-@use "../lib";
+@use "../abstracts/colors" as *;
+@use "../abstracts/mixins" as *;
 
 @function gtkalpha($c, $a) {
   @return string.unquote("alpha(#{$c},#{$a})");
 }
 
 window.OSDWindow {
-  @include lib.unset;
+  @include unset;
   background: transparent;
 }
 
 .OSD {
-  background-color: gtkalpha(colors.$surface0, 0.95);
+  background-color: gtkalpha($surface0, 0.95);
   border-radius: 200px;
-  border: 1px solid gtkalpha(colors.$border, 0.2);
+  border: 1px solid gtkalpha($border, 0.2);
   box-shadow: 0 2px 30px 0 rgba(0, 0, 0, 0.4);
   margin: 2rem 0;
 
@@ -29,11 +29,11 @@ window.OSDWindow {
       icon {
         margin-right: 0.5rem;
         font-size: 20px;
-        color: colors.$text;
+        color: $text;
       }
 
       label {
-        color: colors.$text;
+        color: $text;
         font-size: 1em;
       }
     }
@@ -44,21 +44,21 @@ window.OSDWindow {
         margin-right: 1rem;
 
         trough {
-          background-color: colors.$surfaceVariant;
+          background-color: $surfaceVariant;
           min-height: 1.2rem;
           border-radius: 1rem;
           margin-left: 0.5rem;
         }
 
         highlight {
-          background-color: colors.$primary;
+          background-color: $primary;
           min-height: 0.8rem;
           border-radius: 1rem;
           margin: 0 -1em;
         }
 
         slider {
-          background-color: colors.$primary;
+          background-color: $primary;
           border-radius: 1rem;
           min-height: 1.2rem;
           min-width: 1.2rem;
@@ -68,7 +68,7 @@ window.OSDWindow {
         & .muted {
           highlight,
           slider {
-            background-color: colors.$onSurfaceVariant;
+            background-color: $onSurfaceVariant;
           }
         }
       }
@@ -77,13 +77,13 @@ window.OSDWindow {
 
   .volume-indicator {
     .indicator icon {
-      color: colors.$blue;
+      color: $blue;
     }
   }
 
   .mic-indicator {
     .indicator icon {
-      color: colors.$red;
+      color: $red;
     }
   }
 
@@ -91,16 +91,16 @@ window.OSDWindow {
   .mic-indicator-mute {
     .indicator {
       icon {
-        color: colors.$red;
+        color: $red;
       }
 
       label {
-        color: colors.$subtext1;
+        color: $subtext1;
       }
     }
 
     scale trough highlight {
-      background-color: colors.$overlay2;
+      background-color: $overlay2;
     }
   }
 }

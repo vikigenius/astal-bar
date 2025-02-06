@@ -1,13 +1,13 @@
 @use "sass:string";
-@use "../colors";
-@use "../lib";
+@use "../abstracts/colors" as *;
+@use "../abstracts/mixins" as *;
 
 @function gtkalpha($c, $a) {
   @return string.unquote("alpha(#{$c},#{$a})");
 }
 
 window.NotificationPopups {
-  @include lib.unset;
+  @include unset;
 }
 
 eventbox.Notification {
@@ -22,39 +22,39 @@ eventbox.Notification {
   > box {
     min-width: 400px;
     border-radius: 13px;
-    background-color: colors.$surface0;
+    background-color: $surface0;
     margin: 0.5rem 1rem;
-    box-shadow: 2px 3px 8px 0 gtkalpha(colors.$shadow, 0.4);
-    border: 1pt solid colors.$border;
+    box-shadow: 2px 3px 8px 0 gtkalpha($shadow, 0.4);
+    border: 1pt solid $border;
   }
 
   &.critical > box {
-    border: 1pt solid gtkalpha(colors.$red, 0.4);
+    border: 1pt solid gtkalpha($red, 0.4);
 
     .header {
       .app-name {
-        color: colors.$red;
+        color: $red;
       }
 
       .app-icon {
-        color: gtkalpha(colors.$red, 0.8);
+        color: gtkalpha($red, 0.8);
       }
     }
   }
 
   .header {
     padding: 0.5rem;
-    color: colors.$subtext1;
+    color: $subtext1;
 
     .app-icon {
       margin: 0 0.4rem;
-      color: colors.$lavender;
+      color: $lavender;
     }
 
     .app-name {
       margin-right: 0.3rem;
       font-weight: bold;
-      color: colors.$blue;
+      color: $blue;
 
       &:first-child {
         margin-left: 0.4rem;
@@ -63,24 +63,24 @@ eventbox.Notification {
 
     .time {
       margin: 0 0.4rem;
-      color: colors.$subtext0;
+      color: $subtext0;
     }
 
     button {
       padding: 0.2rem;
       min-width: 0;
       min-height: 0;
-      color: colors.$overlay2;
+      color: $overlay2;
 
       &:hover {
-        color: colors.$red;
+        color: $red;
       }
     }
   }
 
   separator {
     margin: 0 0.4rem;
-    background-color: colors.$border;
+    background-color: $border;
   }
 
   .content {
@@ -89,15 +89,15 @@ eventbox.Notification {
 
     .summary {
       font-size: 1.2em;
-      color: colors.$text;
+      color: $text;
     }
 
     .body {
-      color: colors.$subtext1;
+      color: $subtext1;
     }
 
     .image {
-      border: 1px solid colors.$border;
+      border: 1px solid $border;
       margin-right: 0.5rem;
       border-radius: 9px;
       min-width: 100px;
@@ -116,12 +116,12 @@ eventbox.Notification {
       margin: 0 0.3rem;
       padding: 0.5rem 1rem;
       border-radius: 6px;
-      background-color: colors.$surface1;
-      color: colors.$text;
+      background-color: $surface1;
+      color: $text;
 
       &:hover {
-        background-color: colors.$primary;
-        color: colors.$base;
+        background-color: $primary;
+        color: $base;
       }
 
       &:first-child {

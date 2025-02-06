@@ -1,13 +1,15 @@
 @use "sass:color";
-@use "../colors";
-@use "../lib";
+@use "../abstracts/colors" as *;
+@use "../abstracts/mixins" as *;
+@use "../widgets/active-client" as *;
 
 .Bar {
-  @include lib.unset($rec: true);
+  @include unset($rec: true);
 
   > centerbox {
-    @include lib.window;
+    @include window;
     padding: 0.5rem;
   }
 
+  @include ActiveClient;
 }

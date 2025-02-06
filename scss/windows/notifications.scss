@@ -1,9 +1,4 @@
-@use "sass:string";
 @use "../abstracts" as *;
-
-@function gtkalpha($c, $a) {
-  @return string.unquote("alpha(#{$c},#{$a})");
-}
 
 eventbox.Notification {
   &:first-child > box {

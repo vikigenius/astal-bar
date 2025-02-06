@@ -11,4 +11,19 @@
   }
 
   @include ActiveClient;
+
+  .QuickSettingsButton {
+    padding: 0 to-rem(10px);
+    border-radius: 99px;
+    background-color: gtkalpha($surface1, 0.6);
+
+    &:hover {
+      background-color: gtkalpha($surface2, 0.8);
+    }
+
+    icon {
+      font-size: to-rem(16px);
+      color: $text;
+    }
+  }
 }

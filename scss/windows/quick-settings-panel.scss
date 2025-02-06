@@ -1,0 +1,129 @@
+@use "../abstracts" as *;
+
+window.QuickSettingsWindow {
+  background: transparent;
+
+  .QuickSettings {
+    background-color: $surface0;
+    border-radius: 12px;
+    border: 1px solid gtkalpha($border, 0.2);
+    min-width: 365px;
+
+    .QuickSettingsHeader {
+      margin-bottom: 1rem;
+
+      .battery-label {
+        font-size: 1.1em;
+        font-weight: 600;
+        color: $text;
+      }
+
+      .battery-time {
+        font-size: 0.9em;
+        color: $subtext1;
+      }
+
+      button {
+        padding: 8px;
+        border-radius: 99px;
+        background-color: gtkalpha($surface1, 0.6);
+
+        &:hover {
+          background-color: gtkalpha($surface2, 0.8);
+        }
+
+        icon {
+          font-size: 16px;
+          color: $text;
+        }
+      }
+    }
+
+    scale {
+      margin: 4px 0;
+
+      trough {
+        background-color: $surfaceVariant;
+        min-height: 4px;
+        border-radius: 2px;
+      }
+
+      highlight {
+        background-color: $primary;
+        border-radius: 2px;
+      }
+
+      slider {
+        background-color: $text;
+        border-radius: 50%;
+        min-height: 16px;
+        min-width: 16px;
+        margin: -6px;
+
+        &:hover {
+          background-color: $primary;
+          min-height: 18px;
+          min-width: 18px;
+          margin: -7px;
+        }
+      }
+    }
+
+    .toggle-button {
+      min-height: to-rem(32px);
+      background-color: gtkalpha($surface1, 0.6);
+      border-radius: 12px;
+      padding: 12px;
+      margin: 4px;
+      transition: all 200ms ease;
+
+      &:hover {
+        background-color: gtkalpha($surface2, 0.8);
+      }
+
+      &:active {
+        background-color: $primary;
+
+        label {
+          color: $base;
+        }
+
+        icon {
+          color: $base;
+        }
+      }
+
+      &.active {
+        background-color: $primary;
+
+        label {
+          color: $base;
+        }
+
+        icon {
+          color: $base;
+        }
+      }
+
+      box {
+        margin: 0 8px;
+        min-width: to-rem(166px);
+      }
+
+      icon {
+        font-size: 16px;
+        color: $text;
+        margin-right: 8px;
+      }
+
+      label {
+        color: $text;
+        font-size: 0.95em;
+      }
+    }
+
+    box.horizontal {
+      margin: 4px 0;
+    }
+  }
+}

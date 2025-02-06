@@ -14,7 +14,6 @@ window.OSDWindow {
   background-color: gtkalpha($surface0, 0.95);
   border-radius: 200px;
   border: 1px solid gtkalpha($border, 0.2);
-  box-shadow: 0 2px 30px 0 rgba(0, 0, 0, 0.4);
   margin: 2rem 0;
 
   .volume-indicator,

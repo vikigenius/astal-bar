@@ -38,7 +38,10 @@
           dart-sass
           inotify-tools
           brightnessctl
-          lua52Packages.cjson
+        ])
+        ++ (with pkgs.lua52Packages; [
+          cjson
+          luautf8
         ]);
     };
   };

@@ -3,10 +3,18 @@ local Widget = require("astal.gtk3").Widget
 local Variable = astal.Variable
 local bind = astal.bind
 local cjson = require("cjson")
+local utf8 = require("lua-utf8")
+
+local function sanitize_utf8(text)
+  if not text then return "" end
+  return utf8.gsub(text, "[%z\1-\31\127]", "")
+end
 
 local function truncate_text(text, length)
-  if #text > length then
-    return string.sub(text, 1, length) .. "..."
+  if not text then return "" end
+  text = sanitize_utf8(text)
+  if utf8.len(text) > length then
+    return utf8.sub(text, 1, length) .. "..."
   end
   return text
 end
@@ -44,7 +52,7 @@ local function ActiveClientWidget()
       Widget.Label({
         class_name = "app-id",
         label = bind(active_window):as(function(window)
-          return window.app_id or "Desktop"
+          return sanitize_utf8(window.app_id or "Desktop")
         end),
         halign = "START",
       }),

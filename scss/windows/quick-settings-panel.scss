@@ -69,6 +69,31 @@ window.QuickSettingsWindow {
       }
     }
 
+    .toggle-row {
+      margin: 4px 0;
+    }
+
+    .toggle-container {
+      min-width: 165px;
+
+      &.with-arrow {
+        .toggle-button {
+          min-width: calc(165px - 40px);
+        }
+
+        .expand-button {
+          min-width: 32px;
+          padding: 12px 0;
+        }
+      }
+
+      &:hover {
+        .toggle-button, .expand-button {
+          background-color: gtkalpha($surface2, 0.8);
+        }
+      }
+    }
+
     .toggle-button {
       min-height: to-rem(32px);
       background-color: gtkalpha($surface1, 0.6);
@@ -76,21 +101,10 @@ window.QuickSettingsWindow {
       padding: 12px;
       margin: 4px;
       transition: all 200ms ease;
+      min-width: 165px;
 
       &:hover {
         background-color: gtkalpha($surface2, 0.8);
-      }
-
-      &:active {
-        background-color: $primary;
-
-        label {
-          color: $base;
-        }
-
-        icon {
-          color: $base;
-        }
       }
 
       &.active {
@@ -105,9 +119,15 @@ window.QuickSettingsWindow {
         }
       }
 
+      &.with-arrow {
+        padding-right: 0;
+        border-top-right-radius: 0;
+        border-bottom-right-radius: 0;
+        margin-right: 0;
+      }
+
       box {
         margin: 0 8px;
-        min-width: to-rem(166px);
       }
 
       icon {
@@ -119,6 +139,26 @@ window.QuickSettingsWindow {
       label {
         color: $text;
         font-size: 0.95em;
+      }
+    }
+
+    .expand-button {
+      background-color: gtkalpha($surface1, 0.6);
+      border-radius: 12px;
+      border-top-left-radius: 0;
+      border-bottom-left-radius: 0;
+      padding: 12px 16px;
+      margin: 4px;
+      margin-left: 0;
+      transition: all 200ms ease;
+
+      &:hover {
+        background-color: gtkalpha($surface2, 0.8);
+      }
+
+      icon {
+        font-size: 16px;
+        color: $text;
       }
     }
 

@@ -5,19 +5,15 @@ local bind = astal.bind
 local exec = astal.exec
 
 local function getBatteryTimeString(bat)
-  -- Run upower command and capture output
   local handle = io.popen("upower -i $(upower -e | grep BAT) | grep 'time to'")
   if not handle then return "Unable to get battery info" end
 
   local result = handle:read("*a")
   handle:close()
 
-  -- Parse the time string
   if result then
-    -- Remove leading/trailing whitespace
     result = result:match("^%s*(.-)%s*$")
 
-    -- Extract just the time part after "time to empty:" or "time to full:"
     local time = result:match("time to [%w]+:%s+(.+)")
 
     if time then
@@ -25,8 +21,7 @@ local function getBatteryTimeString(bat)
     end
   end
 
-  -- Fallback message if we couldn't get the time
-  return "Battery time unknown"
+  return "Fully Charged"
 end
 
 local function Header()
@@ -61,7 +56,7 @@ local function Header()
         hexpand = true,
         spacing = 5,
         Widget.Button({
-          child = Widget.Icon({ icon = "camera-photo-symbolic" }),
+          child = Widget.Icon({ icon = "screenshot-recorded-symbolic" }),
           on_clicked = function()
             exec("niri msg action screenshot")
           end,

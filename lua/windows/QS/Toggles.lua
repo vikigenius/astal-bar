@@ -1,6 +1,7 @@
 local astal = require("astal")
 local Widget = require("astal.gtk3.widget")
 local Theme = require("lua.lib.theme")
+local Variable = astal.Variable
 local bind = astal.bind
 local exec = astal.exec
 
@@ -45,6 +46,56 @@ local function ToggleButton(icon, label, is_active, on_clicked)
   return button
 end
 
+local function ExpandableToggle(icon, label)
+  local show_menu = Variable(false)
+
+  local menu_container = Widget.Revealer({
+    transition_duration = 200,
+    transition_type = "SLIDE_DOWN",
+    reveal_child = show_menu(function(value)
+      return value
+    end),
+    child = Widget.Box({
+      class_name = "expanded-menu",
+      orientation = "VERTICAL",
+      spacing = 5,
+      Widget.Label({ label = "Expanded menu placeholder" }),
+    }),
+  })
+
+  local expand_button = Widget.Button({
+    class_name = "expand-button",
+    child = Widget.Icon({ icon = "pan-down-symbolic" }),
+  })
+
+  expand_button.on_clicked = function()
+    show_menu:set(not show_menu:get())
+  end
+
+
+  return Widget.Box({
+    class_name = "toggle-container",
+    orientation = "VERTICAL",
+    spacing = 2,
+    Widget.Box({
+      orientation = "HORIZONTAL",
+      spacing = 0,
+      Widget.Button({
+        class_name = "toggle-button with-arrow",
+        hexpand = true,
+        child = Widget.Box({
+          orientation = "HORIZONTAL",
+          spacing = 10,
+          Widget.Icon({ icon = icon }),
+          Widget.Label({ label = label }),
+        }),
+      }),
+      expand_button,
+    }),
+    menu_container,
+  })
+end
+
 local function Toggles()
   local conservationButton = nil
   local theme = Theme.get_default()
@@ -63,27 +114,30 @@ local function Toggles()
 
   return Widget.Box({
     orientation = "VERTICAL",
-    spacing = 5,
+    spacing = 10,
     Widget.Box({
       orientation = "HORIZONTAL",
-      spacing = 5,
+      spacing = 10,
       homogeneous = true,
       Widget.Box({
+        class_name = "toggle-container with-arrow",
         hexpand = true,
-        child = ToggleButton("network-wireless-symbolic", "Wi-Fi"),
+        child = ExpandableToggle("network-wireless-symbolic", "Wi-Fi"),
       }),
       Widget.Box({
+        class_name = "toggle-container with-arrow",
         hexpand = true,
-        child = ToggleButton("bluetooth-active-symbolic", "Bluetooth"),
+        child = ExpandableToggle("bluetooth-active-symbolic", "Bluetooth"),
       }),
     }),
     Widget.Box({
       orientation = "HORIZONTAL",
-      spacing = 5,
+      spacing = 10,
       homogeneous = true,
       Widget.Box({
         hexpand = true,
-        child = ToggleButton("power-profile-balanced-symbolic", "Power Mode"),
+        class_name = "toggle-container with-arrow",
+        child = ExpandableToggle("power-profile-balanced-symbolic", "Power Mode"),
       }),
       Widget.Box({
         hexpand = true,

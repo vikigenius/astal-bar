@@ -5,20 +5,28 @@ local bind = astal.bind
 local exec = astal.exec
 
 local function getBatteryTimeString(bat)
-  -- You might want to implement this based on the actual Battery API
-  local timeToEmpty = bat.time_to_empty or 0
-  if timeToEmpty == 0 then
-    return "Fully charged"
+  -- Run upower command and capture output
+  local handle = io.popen("upower -i $(upower -e | grep BAT) | grep 'time to'")
+  if not handle then return "Unable to get battery info" end
+
+  local result = handle:read("*a")
+  handle:close()
+
+  -- Parse the time string
+  if result then
+    -- Remove leading/trailing whitespace
+    result = result:match("^%s*(.-)%s*$")
+
+    -- Extract just the time part after "time to empty:" or "time to full:"
+    local time = result:match("time to [%w]+:%s+(.+)")
+
+    if time then
+      return time
+    end
   end
 
-  local hours = math.floor(timeToEmpty / 3600)
-  local minutes = math.floor((timeToEmpty % 3600) / 60)
-
-  if hours > 0 then
-    return string.format("%d hours %d minutes remaining", hours, minutes)
-  else
-    return string.format("%d minutes remaining", minutes)
-  end
+  -- Fallback message if we couldn't get the time
+  return "Battery time unknown"
 end
 
 local function Header()
@@ -60,9 +68,15 @@ local function Header()
         }),
         Widget.Button({
           child = Widget.Icon({ icon = "preferences-system-symbolic" }),
+          on_clicked = function()
+            exec("env XDG_CURRENT_DESKTOP=GNOME gnome-control-center")
+          end,
         }),
         Widget.Button({
           child = Widget.Icon({ icon = "system-lock-screen-symbolic" }),
+          on_clicked = function()
+            exec("hyprlock")
+          end,
         }),
         Widget.Button({
           child = Widget.Icon({ icon = "system-shutdown-symbolic" }),

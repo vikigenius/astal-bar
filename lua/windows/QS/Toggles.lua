@@ -7,6 +7,7 @@ local exec = astal.exec
 
 local Network = require("lua.widgets.QS.Network")
 local ConservationModeToggle = require("lua.widgets.QS.Conservation-Mode")
+local PowerProfiles = require("lua.widgets.QS.Power-Profiles")
 
 local function ToggleButton(icon, label, is_active, on_clicked)
   local button = Widget.Button({
@@ -108,7 +109,7 @@ local function Toggles()
       Widget.Box({
         hexpand = true,
         class_name = "toggle-container with-arrow",
-        child = ExpandableToggle("power-profile-balanced-symbolic", "Power Mode"),
+        PowerProfiles(),
       }),
       Widget.Box({
         hexpand = true,

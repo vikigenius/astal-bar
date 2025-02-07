@@ -5,24 +5,8 @@ local Variable = astal.Variable
 local bind = astal.bind
 local exec = astal.exec
 
-local CONSERVATION_MODE_PATH = "/sys/devices/pci0000:00/0000:00:14.3/PNP0C09:00/VPC2004:00/conservation_mode"
-
-local function getConservationMode()
-  local content, err = astal.read_file(CONSERVATION_MODE_PATH)
-  if err then
-    return false
-  end
-  return tonumber(content) == 1
-end
-
-local function toggleConservationMode()
-  local current = getConservationMode()
-  local value = current and "0" or "1"
-  local err = astal.write_file(CONSERVATION_MODE_PATH, value)
-  if err then
-    print("Error toggling conservation mode:", err)
-  end
-end
+local Network = require("lua.widgets.QS.Network")
+local ConservationModeToggle = require("lua.widgets.QS.Conservation-Mode")
 
 local function ToggleButton(icon, label, is_active, on_clicked)
   local button = Widget.Button({
@@ -46,7 +30,7 @@ local function ToggleButton(icon, label, is_active, on_clicked)
   return button
 end
 
-local function ExpandableToggle(icon, label)
+local function ExpandableToggle(icon, label, custom_menu)
   local show_menu = Variable(false)
 
   local menu_container = Widget.Revealer({
@@ -59,7 +43,7 @@ local function ExpandableToggle(icon, label)
       class_name = "expanded-menu",
       orientation = "VERTICAL",
       spacing = 5,
-      Widget.Label({ label = "Expanded menu placeholder" }),
+      custom_menu or Widget.Label({ label = "Expanded menu placeholder" }),
     }),
   })
 
@@ -97,20 +81,7 @@ local function ExpandableToggle(icon, label)
 end
 
 local function Toggles()
-  local conservationButton = nil
   local theme = Theme.get_default()
-
-  astal.monitor_file(CONSERVATION_MODE_PATH, function(_, event)
-    if conservationButton and event == "CHANGED" then
-      local isEnabled = getConservationMode()
-      local style_context = conservationButton:get_style_context()
-      if isEnabled then
-        style_context:add_class("active")
-      else
-        style_context:remove_class("active")
-      end
-    end
-  end)
 
   return Widget.Box({
     orientation = "VERTICAL",
@@ -122,7 +93,7 @@ local function Toggles()
       Widget.Box({
         class_name = "toggle-container with-arrow",
         hexpand = true,
-        child = ExpandableToggle("network-wireless-symbolic", "Wi-Fi"),
+        child = Network(),
       }),
       Widget.Box({
         class_name = "toggle-container with-arrow",
@@ -176,25 +147,7 @@ local function Toggles()
           end,
         }),
       }),
-      Widget.Box({
-        hexpand = true,
-        child = Widget.Button({
-          setup = function(self)
-            conservationButton = self
-            if getConservationMode() then
-              self:get_style_context():add_class("active")
-            end
-          end,
-          class_name = "toggle-button",
-          child = Widget.Box({
-            orientation = "HORIZONTAL",
-            spacing = 10,
-            Widget.Icon({ icon = os.getenv("PWD") .. "/icons/battery-powersave.svg" }),
-            Widget.Label({ label = "Power Saver" }),
-          }),
-          on_clicked = toggleConservationMode,
-        }),
-      }),
+      ConservationModeToggle(),
     }),
   })
 end

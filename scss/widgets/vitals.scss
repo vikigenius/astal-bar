@@ -1,0 +1,49 @@
+@use "../abstracts" as *;
+
+.Vitals {
+  background-color: gtkalpha($surface1, 0.6);
+  border-radius: 12px;
+  padding: 8px 12px;
+  margin: 4px;
+
+  box {
+    margin: 4px;
+  }
+
+  .cpu {
+    icon {
+      color: $blue;
+      font-size: 16px;
+    }
+  }
+
+  .memory {
+    icon {
+      color: $green;
+      font-size: 16px;
+    }
+  }
+
+  .disk {
+    icon {
+      color: $yellow;
+      font-size: 16px;
+    }
+  }
+
+  .temperature {
+    icon {
+      color: $red;
+      font-size: 16px;
+    }
+  }
+
+  label {
+    color: $text;
+    font-size: 0.9em;
+  }
+
+  &:hover {
+    background-color: gtkalpha($surface2, 0.8);
+  }
+}

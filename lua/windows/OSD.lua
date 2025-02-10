@@ -9,14 +9,12 @@ local timeout = astal.timeout
 local SHOW_TIMEOUT = 1500
 
 local function create_volume_indicator(device, class_name)
-  local box = Widget.Box({
+  return Widget.Box({
     class_name = class_name,
     visible = false,
     Widget.Box({
       class_name = "indicator",
-      Widget.Icon({
-        icon = bind(device, "volume-icon"),
-      }),
+      Widget.Icon({ icon = bind(device, "volume-icon") }),
       Widget.Label({
         label = bind(device, "volume"):as(function(vol)
           return string.format("%d%%", math.floor((vol or 0) * 100))
@@ -29,17 +27,11 @@ local function create_volume_indicator(device, class_name)
       Widget.Slider({
         class_name = "volume-slider",
         hexpand = true,
-        on_dragged = function(self)
-          device.volume = self.value
-        end,
+        on_dragged = function(slider) device.volume = slider.value end,
         value = bind(device, "volume"),
       }),
     }),
   })
-
-  return {
-    box = box,
-  }
 end
 
 local function create_mute_indicator(device, class_name)
@@ -55,81 +47,76 @@ local function create_mute_indicator(device, class_name)
   })
 end
 
-local function create_osd_widget()
+local function create_osd_widget(current_timeout_ref)
   local speaker = Wp.get_default().audio.default_speaker
   local mic = Wp.get_default().audio.default_microphone
-
-  local speaker_vol = create_volume_indicator(speaker, "volume-indicator")
-  local mic_vol = create_volume_indicator(mic, "mic-indicator")
-  local speaker_mute = create_mute_indicator(speaker, "volume-indicator")
-  local mic_mute = create_mute_indicator(mic, "mic-indicator")
-
-  local current_timeout = nil
-
-  local function hide_all()
-    speaker_vol.box.visible = false
-    mic_vol.box.visible = false
-    speaker_mute.visible = false
-    mic_mute.visible = false
-  end
-
-  local function show_osd(widget)
-    hide_all()
-    widget.visible = true
-
-    if current_timeout then
-      current_timeout:cancel()
-    end
-
-    current_timeout = timeout(SHOW_TIMEOUT, function()
-      widget.visible = false
-      current_timeout = nil
-    end)
-  end
-
-  bind(speaker, "volume"):subscribe(function(vol)
-    show_osd(speaker_vol.box)
-  end)
-
-  bind(speaker, "mute"):subscribe(function(muted)
-    if muted then
-      show_osd(speaker_mute)
-    else
-      show_osd(speaker_vol.box)
-    end
-  end)
-
-  bind(mic, "volume"):subscribe(function(vol)
-    show_osd(mic_vol.box)
-  end)
-
-  bind(mic, "mute"):subscribe(function(muted)
-    if muted then
-      show_osd(mic_mute)
-    else
-      show_osd(mic_vol.box)
-    end
-  end)
 
   return Widget.Box({
     class_name = "OSD",
     vertical = true,
-    speaker_vol.box,
-    speaker_mute,
-    mic_vol.box,
-    mic_mute,
+    create_volume_indicator(speaker, "volume-indicator"),
+    create_mute_indicator(speaker, "volume-indicator"),
+    create_volume_indicator(mic, "mic-indicator"),
+    create_mute_indicator(mic, "mic-indicator"),
+    setup = function(self)
+      local speaker_vol = self.children[1]
+      local speaker_mute = self.children[2]
+      local mic_vol = self.children[3]
+      local mic_mute = self.children[4]
+
+      local function hide_all()
+        speaker_vol.visible = false
+        mic_vol.visible = false
+        speaker_mute.visible = false
+        mic_mute.visible = false
+      end
+
+      local function show_osd(widget)
+        hide_all()
+        widget.visible = true
+
+        if current_timeout_ref.timer then
+          current_timeout_ref.timer:cancel()
+        end
+
+        current_timeout_ref.timer = timeout(SHOW_TIMEOUT, function()
+          widget.visible = false
+          current_timeout_ref.timer = nil
+        end)
+      end
+
+      bind(speaker, "volume"):subscribe(function()
+        show_osd(speaker_vol)
+      end)
+
+      bind(speaker, "mute"):subscribe(function(muted)
+        show_osd(muted and speaker_mute or speaker_vol)
+      end)
+
+      bind(mic, "volume"):subscribe(function()
+        show_osd(mic_vol)
+      end)
+
+      bind(mic, "mute"):subscribe(function(muted)
+        show_osd(muted and mic_mute or mic_vol)
+      end)
+    end
   })
 end
 
 return function(gdkmonitor)
   local Anchor = astal.require("Astal").WindowAnchor
+  local current_timeout_ref = { timer = nil }
 
   return Widget.Window({
     class_name = "OSDWindow",
     gdkmonitor = gdkmonitor,
     anchor = Anchor.BOTTOM,
-    Widget.Box({
-      create_osd_widget(),
-    }),
+    create_osd_widget(current_timeout_ref),
+    on_destroy = function()
+      if current_timeout_ref.timer then
+        current_timeout_ref.timer:cancel()
+      end
+    end
   })
 end

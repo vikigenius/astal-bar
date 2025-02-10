@@ -107,7 +107,6 @@ PowerProfilesWidget.ToggleButton = function()
   })
 
   toggle_button.on_clicked = function()
-    -- Toggle between performance and balanced
     if power.active_profile == "performance" then
       power.active_profile = "balanced"
     else

@@ -35,25 +35,6 @@ local function SysTray()
   })
 end
 
--- local function AudioSlider()
--- 	local speaker = Wp.get_default().audio.default_speaker
-
--- 	return Widget.Box({
--- 		class_name = "AudioSlider",
--- 		css = "min-width: 140px;",
--- 		Widget.Icon({
--- 			icon = bind(speaker, "volume-icon"),
--- 		}),
--- 		Widget.Slider({
--- 			hexpand = true,
--- 			on_dragged = function(self)
--- 				speaker.volume = self.value
--- 			end,
--- 			value = bind(speaker, "volume"),
--- 		}),
--- 	})
--- end
-
 local function Media()
   local player = Mpris.Player.new("spotify")
 

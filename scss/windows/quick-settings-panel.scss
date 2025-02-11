@@ -69,6 +69,142 @@ window.QuickSettingsWindow {
       }
     }
 
+    .volume-indicator,
+    .mic-indicator {
+      padding: 8px 12px;
+
+      .indicator {
+        icon {
+          font-size: 16px;
+          margin-right: 12px;
+        }
+      }
+
+      .slider-container {
+        margin: 0 8px;
+
+        scale {
+          margin-left: 1rem;
+          margin-right: 1rem;
+
+          trough {
+            background-color: $surfaceVariant;
+            min-height: 1.2rem;
+            border-radius: 1rem;
+            margin-left: 0.5rem;
+          }
+
+          highlight {
+            background-color: $primary;
+            min-height: 0.8rem;
+            border-radius: 1rem;
+            margin: 0 -1em;
+          }
+
+          slider {
+            background-color: $primary;
+            border-radius: 1rem;
+            min-height: 1.2rem;
+            min-width: 1.2rem;
+            margin: -0.2em;
+          }
+
+          &.muted {
+            highlight,
+            slider {
+              background-color: $onSurfaceVariant;
+            }
+          }
+        }
+      }
+
+      .volume-button {
+        padding: 8px;
+        border-radius: 99px;
+        background-color: gtkalpha($surface1, 0.6);
+        margin-right: 8px;
+
+        &:hover {
+          background-color: gtkalpha($surface2, 0.8);
+        }
+
+        &.active {
+          icon {
+            color: $red;
+          }
+        }
+
+        icon {
+          font-size: 16px;
+          color: $text;
+        }
+      }
+
+      .expand-button {
+        padding: 8px;
+        border-radius: 99px;
+        background-color: gtkalpha($surface1, 0.6);
+
+        &:hover {
+          background-color: gtkalpha($surface2, 0.8);
+        }
+
+        icon {
+          font-size: 16px;
+          color: $text;
+        }
+      }
+    }
+
+    .volume-indicator {
+      .indicator icon {
+        color: $blue;
+      }
+    }
+
+    .mic-indicator {
+      .indicator icon {
+        color: $red;
+      }
+    }
+
+    .expanded-menu {
+      padding: 8px;
+      background-color: gtkalpha($surface1, 0.6);
+      border-radius: 12px;
+      margin-top: 4px;
+
+      .device-item {
+        padding: 8px 12px;
+        border-radius: 8px;
+
+        &:hover {
+          background-color: gtkalpha($surface2, 0.8);
+        }
+
+        box {
+          margin: 8px;
+
+          &.active {
+            icon, label {
+              color: $primary;
+            }
+          }
+
+          icon {
+            font-size: 16px;
+            color: $text;
+          }
+
+          label {
+            color: $text;
+            font-size: 0.95em;
+          }
+        }
+      }
+    }
+
+
     .toggle-row {
       margin: 4px 0;
     }

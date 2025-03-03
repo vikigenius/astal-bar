@@ -1,0 +1,111 @@
+@use "../abstracts" as *;
+@use "../components/button" as *;
+
+window.AudioControlWindow {
+  background: transparent;
+
+  > box {
+    background-color: $surface0;
+    border-radius: to-rem(12px);
+    border: to-rem(1px) solid gtkalpha($border, 0.2);
+    min-width: to-rem(350px);
+
+    .volume-controls {
+      margin-bottom: to-rem(16px);
+
+      box {
+        .mute-button {
+          @include button;
+          padding: to-rem(8px);
+          margin: 0;
+
+          icon {
+            font-size: to-rem(20px);
+          }
+        }
+
+        scale {
+          margin: to-rem(4px) to-rem(8px);
+
+          trough {
+            background-color: gtkalpha($surface1, 0.6);
+            border-radius: to-rem(6px);
+            min-height: to-rem(6px);
+
+            highlight {
+              background-color: $primary;
+              border-radius: to-rem(6px);
+            }
+          }
+
+          slider {
+            background-color: $text;
+            border-radius: 50%;
+            min-height: to-rem(16px);
+            min-width: to-rem(16px);
+            margin: to-rem(-5px);
+          }
+        }
+
+        label {
+          color: $subtext1;
+          font-size: 0.9em;
+          padding: 0 to-rem(4px);
+        }
+      }
+    }
+
+    .audio-outputs,
+    .microphone-inputs {
+      .device-selector {
+        padding: to-rem(8px);
+        border-radius: to-rem(8px);
+        background-color: transparent;
+        transition: all 200ms ease;
+
+        &:hover {
+          background-color: gtkalpha($surface2, 0.8);
+        }
+
+        icon:last-child {
+          transition: all 200ms ease;
+          -gtk-icon-transform: rotate(-90deg);
+
+          &.expanded {
+            -gtk-icon-transform: rotate(0deg)
+          }
+        }
+      }
+
+      .device-list {
+        margin-left: to-rem(8px);
+
+        button {
+          padding: to-rem(8px);
+          border-radius: to-rem(8px);
+          background-color: transparent;
+          transition: all 200ms ease;
+
+          &:hover {
+            background-color: gtkalpha($surface2, 0.8);
+          }
+
+          &.active {
+            background-color: $primary;
+
+            label, icon {
+              color: $base;
+            }
+          }
+        }
+      }
+    }
+
+    .settings {
+      button {
+        @include button;
+        padding: to-rem(8px) to-rem(12px);
+      }
+    }
+  }
+}

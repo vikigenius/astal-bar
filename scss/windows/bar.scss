@@ -17,6 +17,10 @@
     @include button;
   }
 
+  .audio-button {
+    @include button;
+  }
+
   .battery-button {
     @include button;
   }

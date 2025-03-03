@@ -6,6 +6,7 @@ local GLib = astal.require("GLib")
 local Mpris = astal.require("AstalMpris")
 local Tray = astal.require("AstalTray")
 local Battery = astal.require("AstalBattery")
+local Wp = astal.require("AstalWp")
 
 local QuickSettings = require("lua.widgets.QuickSettings")
 local Vitals = require("lua.widgets.Vitals")
@@ -71,6 +72,47 @@ local function Time(format)
   })
 end
 
+local function AudioControl()
+  local speaker = Wp.get_default().audio.default_speaker
+  local mic = Wp.get_default().audio.default_microphone
+  local window_visible = false
+  local audio_window = nil
+
+  local function toggle_audio_window()
+    if window_visible and audio_window then
+      audio_window:hide()
+      window_visible = false
+    else
+      if not audio_window then
+        local AudioControlWindow = require("lua.windows.AudioControl")
+        audio_window = AudioControlWindow.new()
+      end
+      audio_window:show_all()
+      window_visible = true
+    end
+  end
+
+  return Widget.Button({
+    class_name = "audio-button",
+    on_clicked = toggle_audio_window,
+    Widget.Box({
+      spacing = 10,
+      Widget.Icon({
+        icon = bind(mic, "volume-icon"),
+        tooltip_text = bind(mic, "volume"):as(function(v)
+          return string.format("Microphone Volume: %.0f%%", v * 100)
+        end),
+      }),
+      Widget.Icon({
+        tooltip_text = bind(speaker, "volume"):as(function(v)
+          return string.format("Audio Volume: %.0f%%", v * 100)
+        end),
+        icon = bind(speaker, "volume-icon"),
+      }),
+    }),
+  })
+end
+
 local function BatteryLevel()
   local bat = Battery.get_default()
   local window_visible = false
@@ -130,6 +172,7 @@ return function(gdkmonitor)
         Vitals(),
         SysTray(),
         QuickSettings(),
+        AudioControl(),
         BatteryLevel(),
       }),
     }),

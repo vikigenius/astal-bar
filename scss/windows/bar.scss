@@ -1,6 +1,7 @@
 @use "sass:color";
 @use "../abstracts" as *;
 @use "../widgets/active-client" as *;
+@use "../components/button" as *;
 
 .Bar {
   @include unset($rec: true);
@@ -13,17 +14,10 @@
   @include ActiveClient;
 
   .QuickSettingsButton {
-    padding: 0 to-rem(10px);
-    border-radius: 99px;
-    background-color: gtkalpha($surface1, 0.6);
+    @include button;
+  }
 
-    &:hover {
-      background-color: gtkalpha($surface2, 0.8);
-    }
-
-    icon {
-      font-size: to-rem(16px);
-      color: $text;
-    }
+  .battery-button {
+    @include button;
   }
 }

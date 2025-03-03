@@ -4,12 +4,14 @@
 
 // Components
 @use "components/tooltip";
+@use "components/button";
 
 // Windows
 @use "windows/bar";
 @use "windows/notifications";
 @use "windows/OSD";
 @use "windows/quick-settings-panel.scss";
+@use "windows/battery.scss";
 
 // Widgets
 @use "widgets/active-client";

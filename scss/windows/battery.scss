@@ -1,0 +1,110 @@
+@use "../abstracts" as *;
+
+window.BatteryWindow {
+  background: transparent;
+
+  > box {
+    background-color: $surface0;
+    border-radius: to-rem(12px);
+    border: to-rem(1px) solid gtkalpha($border, 0.2);
+    min-width: to-rem(350px);
+
+    .battery-main-info {
+      margin-bottom: to-rem(16px);
+
+      icon {
+        font-size: to-rem(24px);
+        color: $primary;
+        margin-right: to-rem(12px);
+      }
+
+      label {
+        &:first-child {
+          font-size: 1.1em;
+          font-weight: 600;
+          color: $text;
+        }
+
+        &:last-child {
+          font-size: 0.9em;
+          color: $subtext1;
+        }
+      }
+    }
+
+    .battery-details {
+      background-color: gtkalpha($surface1, 0.6);
+      border-radius: to-rem(12px);
+      padding: to-rem(12px);
+
+      box {
+        margin: to-rem(4px) 0;
+
+        label {
+          &:first-child {
+            color: $subtext1;
+          }
+
+          &:last-child {
+            color: $text;
+          }
+        }
+      }
+    }
+
+    .power-profiles {
+      button {
+        background-color: gtkalpha($surface1, 0.6);
+        border-radius: to-rem(8px);
+        padding: to-rem(8px) to-rem(12px);
+        transition: all 200ms ease;
+
+        &:hover {
+          background-color: gtkalpha($surface2, 0.8);
+        }
+
+        &.active {
+          background-color: $primary;
+          color: $base;
+        }
+
+        label {
+          color: $text;
+        }
+      }
+    }
+
+    .conservation-mode {
+      switch {
+        background-color: gtkalpha($surface1, 0.6);
+        padding: to-rem(2px);
+
+        &:checked {
+          background-color: $primary;
+        }
+
+        slider {
+          background-color: $text;
+          margin: 0;
+        }
+      }
+    }
+
+    .settings {
+      button {
+        background-color: gtkalpha($surface1, 0.6);
+        border-radius: to-rem(8px);
+        padding: to-rem(8px) to-rem(12px);
+        transition: all 200ms ease;
+
+        &:hover {
+          background-color: gtkalpha($surface2, 0.8);
+        }
+
+        label {
+          color: $text;
+        }
+      }
+    }
+  }
+}

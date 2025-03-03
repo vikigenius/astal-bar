@@ -1,10 +1,11 @@
 local astal = require("astal")
 local Widget = require("astal.gtk3.widget")
 local Variable = astal.Variable
-local GLib = astal.require("GLib")
 local bind = astal.bind
+local GLib = astal.require("GLib")
 local Mpris = astal.require("AstalMpris")
 local Tray = astal.require("AstalTray")
+local Battery = astal.require("AstalBattery")
 
 local QuickSettings = require("lua.widgets.QuickSettings")
 local Vitals = require("lua.widgets.Vitals")
@@ -70,6 +71,43 @@ local function Time(format)
   })
 end
 
+local function BatteryLevel()
+  local bat = Battery.get_default()
+  local window_visible = false
+  local battery_window = nil
+
+  local function toggle_battery_window()
+    if window_visible and battery_window then
+      battery_window:hide()
+      window_visible = false
+    else
+      if not battery_window then
+        local BatteryWindow = require("lua.windows.Battery")
+        battery_window = BatteryWindow.new() -- Use the .new() constructor
+      end
+      battery_window:show_all()
+      window_visible = true
+    end
+  end
+
+  return Widget.Button({
+    class_name = "battery-button",
+    visible = bind(bat, "is-present"),
+    on_clicked = toggle_battery_window,
+    Widget.Box({
+      Widget.Icon({
+        icon = bind(bat, "battery-icon-name"),
+        css = "padding-right: 5pt;",
+      }),
+      Widget.Label({
+        label = bind(bat, "percentage"):as(function(p)
+          return tostring(math.floor(p * 100)) .. " %"
+        end),
+      }),
+    }),
+  })
+end
+
 return function(gdkmonitor)
   local Anchor = astal.require("Astal").WindowAnchor
 
@@ -92,6 +130,7 @@ return function(gdkmonitor)
         Vitals(),
         SysTray(),
         QuickSettings(),
+        BatteryLevel(),
       }),
     }),
   })

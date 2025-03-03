@@ -21,6 +21,10 @@
     @include button;
   }
 
+  .wifi-button {
+    @include button;
+  }
+
   .battery-button {
     @include button;
   }

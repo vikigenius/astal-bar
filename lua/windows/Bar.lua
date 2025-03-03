@@ -5,6 +5,7 @@ local bind = astal.bind
 local GLib = astal.require("GLib")
 local Mpris = astal.require("AstalMpris")
 local Tray = astal.require("AstalTray")
+local Network = astal.require("AstalNetwork")
 local Battery = astal.require("AstalBattery")
 local Wp = astal.require("AstalWp")
 
@@ -113,6 +114,42 @@ local function AudioControl()
   })
 end
 
+local function Wifi()
+  local network = Network.get_default()
+  local wifi = bind(network, "wifi")
+  local window_visible = false
+  local network_window = nil
+
+  local function toggle_network_window()
+    if window_visible and network_window then
+      network_window:hide()
+      window_visible = false
+    else
+      if not network_window then
+        local NetworkWindow = require("lua.windows.Network")
+        network_window = NetworkWindow.new()
+      end
+      network_window:show_all()
+      window_visible = true
+    end
+  end
+
+  return Widget.Button({
+    class_name = "wifi-button",
+    visible = wifi:as(function(v)
+      return v ~= nil
+    end),
+    on_clicked = toggle_network_window,
+    wifi:as(function(w)
+      return Widget.Icon({
+        tooltip_text = bind(w, "ssid"):as(tostring),
+        class_name = "Wifi",
+        icon = bind(w, "icon-name"),
+      })
+    end),
+  })
+end
+
 local function BatteryLevel()
   local bat = Battery.get_default()
   local window_visible = false
@@ -173,6 +210,7 @@ return function(gdkmonitor)
         SysTray(),
         QuickSettings(),
         AudioControl(),
+        Wifi(),
         BatteryLevel(),
       }),
     }),

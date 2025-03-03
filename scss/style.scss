@@ -15,5 +15,6 @@
 @use "windows/battery.scss";
 
 // Widgets
+@use "widgets/workspaces.scss";
 @use "widgets/active-client";
 @use "widgets/vitals";

@@ -9,8 +9,9 @@ local Network = astal.require("AstalNetwork")
 local Battery = astal.require("AstalBattery")
 local Wp = astal.require("AstalWp")
 
-local Vitals = require("lua.widgets.Vitals")
+local Workspaces = require("lua.widgets.Workspaces")
 local ActiveClient = require("lua.widgets.ActiveClient")
+local Vitals = require("lua.widgets.Vitals")
 
 local map = require("lua.lib.common").map
 
@@ -197,6 +198,7 @@ return function(gdkmonitor)
     Widget.CenterBox({
       Widget.Box({
         halign = "START",
+        Workspaces(),
         ActiveClient(),
       }),
       Widget.Box({

@@ -8,6 +8,7 @@ window.BatteryWindow {
     border-radius: to-rem(12px);
     border: to-rem(1px) solid gtkalpha($border, 0.2);
     min-width: to-rem(350px);
+    margin: to-rem(10px);
 
     .battery-main-info {
       margin-bottom: to-rem(16px);

@@ -5,40 +5,42 @@ local exec = astal.exec
 local Theme = {}
 
 function Theme:New()
-  local instance = {
-    is_dark = Variable(false)
-  }
-  setmetatable(instance, self)
-  self.__index = self
+	local instance = {
+		is_dark = Variable(false),
+	}
+	setmetatable(instance, self)
+	self.__index = self
 
-  instance.is_dark:set(self:get_current_theme_mode() == "dark")
+	instance.is_dark:set(self:get_current_theme_mode() == "dark")
 
-  return instance
+	return instance
 end
 
 function Theme:get_current_theme_mode()
-  local out, err = exec("dconf read /org/gnome/desktop/interface/color-scheme")
-  if err then return "light" end
+	local out, err = exec("dconf read /org/gnome/desktop/interface/color-scheme")
+	if err then
+		return "light"
+	end
 
-  return out:match("prefer%-dark") and "dark" or "light"
+	return out:match("prefer%-dark") and "dark" or "light"
 end
 
 function Theme:toggle_theme()
-  local new_state = not self.is_dark:get()
-  local scheme = new_state and "prefer-dark" or "prefer-light"
+	local new_state = not self.is_dark:get()
+	local scheme = new_state and "prefer-dark" or "prefer-light"
 
-  exec("niri msg action do-screen-transition")
-  exec(string.format("dconf write /org/gnome/desktop/interface/color-scheme \"'%s'\"", scheme))
+	exec("niri msg action do-screen-transition")
+	exec(string.format("dconf write /org/gnome/desktop/interface/color-scheme \"'%s'\"", scheme))
 
-  self.is_dark:set(new_state)
+	self.is_dark:set(new_state)
 end
 
 local instance = nil
 function Theme.get_default()
-  if not instance then
-    instance = Theme:New()
-  end
-  return instance
+	if not instance then
+		instance = Theme:New()
+	end
+	return instance
 end
 
 return Theme

@@ -25,7 +25,9 @@ end
 
 ---@param path string
 ---@return boolean
-function M.file_exists(path) return GLib.file_test(path, "EXISTS") end
+function M.file_exists(path)
+	return GLib.file_test(path, "EXISTS")
+end
 
 function M.varmap(initial)
 	local map = initial
@@ -40,7 +42,9 @@ function M.varmap(initial)
 	end
 
 	local function delete(key)
-		if Gtk.Widget:is_type_of(map[key]) then map[key]:destroy() end
+		if Gtk.Widget:is_type_of(map[key]) then
+			map[key]:destroy()
+		end
 
 		map[key] = nil
 	end
@@ -57,10 +61,16 @@ function M.varmap(initial)
 			delete(key)
 			notify()
 		end,
-		get = function() return var:get() end,
-		subscribe = function(callback) return var:subscribe(callback) end,
+		get = function()
+			return var:get()
+		end,
+		subscribe = function(callback)
+			return var:subscribe(callback)
+		end,
 	}, {
-		__call = function() return var() end,
+		__call = function()
+			return var()
+		end,
 	})
 end
 

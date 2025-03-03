@@ -73,7 +73,7 @@ window.AudioControlWindow {
           -gtk-icon-transform: rotate(-90deg);
 
           &.expanded {
-            -gtk-icon-transform: rotate(0deg)
+            -gtk-icon-transform: rotate(0deg);
           }
         }
       }
@@ -94,7 +94,8 @@ window.AudioControlWindow {
           &.active {
             background-color: $primary;
 
-            label, icon {
+            label,
+            icon {
               color: $base;
             }
           }

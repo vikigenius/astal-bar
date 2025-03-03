@@ -24,20 +24,21 @@ local function NotificationMap()
 				-- so that it acts as a "popup" and we can still display it
 				-- in a notification center like widget
 				-- but clicking on the close button will close it
-				on_hover_lost = function() notif_map.delete(id) end,
+				on_hover_lost = function()
+					notif_map.delete(id)
+				end,
 				setup = function()
 					timeout(TIMEOUT_DELAY, function()
-						-- uncomment this if you want to "hide" the notifications
-						-- after TIMEOUT_DELAY
-
-						-- NotificationMap.delete(id)
+						notif_map.delete(id)
 					end)
 				end,
 			})
 		)
 	end
 
-	notifd.on_resolved = function(_, id) notif_map.delete(id) end
+	notifd.on_resolved = function(_, id)
+		notif_map.delete(id)
+	end
 
 	return notif_map
 end

@@ -99,17 +99,18 @@ window.NetworkWindow {
         margin-left: to-rem(8px);
         min-height: to-rem(300px);
 
-        &, scrolledwindow {
-            border: none;
-            outline: none;
-            box-shadow: none;
-            -gtk-outline-radius: 0;
-          }
+        &,
+        scrolledwindow {
+          border: none;
+          outline: none;
+          box-shadow: none;
+          -gtk-outline-radius: 0;
+        }
 
-          viewport {
-            border: none;
-            outline: none;
-          }
+        viewport {
+          border: none;
+          outline: none;
+        }
 
         button {
           padding: to-rem(8px);
@@ -125,7 +126,8 @@ window.NetworkWindow {
           &.active {
             background-color: $primary;
 
-            label, icon {
+            label,
+            icon {
               color: $base;
             }
           }

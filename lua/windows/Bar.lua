@@ -83,7 +83,7 @@ local function BatteryLevel()
     else
       if not battery_window then
         local BatteryWindow = require("lua.windows.Battery")
-        battery_window = BatteryWindow.new() -- Use the .new() constructor
+        battery_window = BatteryWindow.new()
       end
       battery_window:show_all()
       window_visible = true

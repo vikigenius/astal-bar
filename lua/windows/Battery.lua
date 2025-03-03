@@ -4,6 +4,7 @@ local bind = astal.bind
 local Variable = astal.Variable
 local Battery = astal.require("AstalBattery")
 local PowerProfiles = astal.require("AstalPowerProfiles")
+local GLib = astal.require("GLib")
 
 local CONSERVATION_MODE_PATH = "/sys/devices/pci0000:00/0000:00:14.3/PNP0C09:00/VPC2004:00/conservation_mode"
 
@@ -201,9 +202,10 @@ local function PowerProfile(on_destroy_ref)
     end,
   })
 
-  bind(power, "active-profile"):subscribe(function(profile)
+  local profile_binding = bind(power, "active-profile"):subscribe(function(profile)
     updateButtons(buttons_box, profile)
   end)
+  on_destroy_ref.profile_binding = profile_binding
 
   local bat = getBatteryDevice()
   local profile_monitor = Variable(""):poll(1000, function()
@@ -214,7 +216,6 @@ local function PowerProfile(on_destroy_ref)
       power.active_profile = "balanced"
     end
   end)
-
   on_destroy_ref.profile_monitor = profile_monitor
 
   return Widget.Box({
@@ -287,13 +288,13 @@ local function Settings(close_window)
     class_name = "settings",
     Widget.Button({
       label = "Power & battery settings",
-      ["on_click-release"] = function()
+      on_clicked = function()
         if close_window then
           close_window()
         end
-        astal.timeout(100, function()
-          astal.exec("env XDG_CURRENT_DESKTOP=GNOME gnome-control-center power")
-        end)
+        GLib.spawn_command_line_async(
+          "env XDG_CURRENT_DESKTOP=GNOME gnome-control-center power"
+        )
       end,
     }),
   })
@@ -305,18 +306,13 @@ function BatteryWindow.new(gdkmonitor)
   local Anchor = astal.require("Astal").WindowAnchor
   local window
   local on_destroy_ref = {}
+  local is_closing = false
 
   local function close_window()
-    if window then
-      if on_destroy_ref.time_info then
-        on_destroy_ref.time_info:drop()
-        on_destroy_ref.time_info = nil
-      end
-      if on_destroy_ref.profile_state then
-        on_destroy_ref.profile_state:drop()
-        on_destroy_ref.profile_state = nil
-      end
+    if window and not is_closing then
+      is_closing = true
       window:hide()
+      is_closing = false
     end
   end
 

@@ -9,7 +9,6 @@ local Network = astal.require("AstalNetwork")
 local Battery = astal.require("AstalBattery")
 local Wp = astal.require("AstalWp")
 
-local QuickSettings = require("lua.widgets.QuickSettings")
 local Vitals = require("lua.widgets.Vitals")
 local ActiveClient = require("lua.widgets.ActiveClient")
 
@@ -208,7 +207,6 @@ return function(gdkmonitor)
         halign = "END",
         Vitals(),
         SysTray(),
-        QuickSettings(),
         AudioControl(),
         Wifi(),
         BatteryLevel(),

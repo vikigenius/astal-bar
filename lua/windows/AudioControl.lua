@@ -6,20 +6,19 @@ local Gtk = astal.require("Gtk")
 local Wp = astal.require("AstalWp")
 local Variable = astal.Variable
 
+_G.AUDIO_CONTROL_UPDATING = false
+
 local show_output_devices = Variable(false)
 local show_input_devices = Variable(false)
 
 local function create_volume_control(type)
   local audio = Wp.get_default().audio
   local device = audio["default_" .. type]
+  local volume_scale
 
-  local volume = Variable(device.volume * 100)
+  local volume = Variable(device and device.volume * 100 or 0)
 
-  bind(device, "volume"):as(function(vol)
-    volume:set(vol * 100)
-  end)
-
-  local volume_scale = Widget.Slider({
+  volume_scale = Widget.Slider({
     class_name = "volume-slider",
     draw_value = false,
     hexpand = true,
@@ -32,11 +31,56 @@ local function create_volume_control(type)
       step_increment = 1,
       page_increment = 10,
     }),
+    on_realize = function(self)
+      if device then
+        self:set_value(device.volume * 100)
+      end
+    end,
     on_value_changed = function(self)
-      device.volume = self:get_value() / 100
-      volume:set(self:get_value())
+      if not device then return end
+
+      local new_value = self:get_value() / 100
+      if new_value >= 0 and new_value <= 1 then
+        device.volume = new_value
+        volume:set(self:get_value())
+      end
     end
   })
+
+  if device then
+    bind(device, "volume"):as(function(vol)
+      if vol then
+        volume:set(vol * 100)
+        if volume_scale and volume_scale.set_value then
+          _G.AUDIO_CONTROL_UPDATING = true
+          volume_scale:set_value(vol * 100)
+          _G.AUDIO_CONTROL_UPDATING = false
+        end
+      end
+    end)
+
+    local last_vol = device.volume
+    GLib.timeout_add(GLib.PRIORITY_DEFAULT_IDLE, 100, function()
+      if device and device.volume and device.volume ~= last_vol then
+        last_vol = device.volume
+        _G.AUDIO_CONTROL_UPDATING = true
+        volume:set(last_vol * 100)
+        if volume_scale and volume_scale.set_value then
+          volume_scale:set_value(last_vol * 100)
+        end
+        _G.AUDIO_CONTROL_UPDATING = false
+      end
+      return true
+    end)
+  end
+
+  bind(audio, "default_" .. type):as(function(new_device)
+    if new_device then
+      device = new_device
+      volume:set(device.volume * 100)
+      volume_scale:set_value(device.volume * 100)
+    end
+  end)
 
   return Widget.Box({
     orientation = "HORIZONTAL",
@@ -44,7 +88,9 @@ local function create_volume_control(type)
     Widget.Button({
       class_name = "mute-button",
       on_clicked = function()
-        device.mute = not device.mute
+        if device then
+          device.mute = not device.mute
+        end
       end,
       child = Widget.Icon({
         icon = bind(device, "mute"):as(function(mute)
@@ -62,8 +108,8 @@ local function create_volume_control(type)
       hexpand = true,
       volume_scale,
       Widget.Label({
-        label = bind(device, "volume"):as(function(vol)
-          return string.format("%d%%", math.floor(vol * 100))
+        label = bind(volume, nil):as(function(vol)
+          return string.format("%d%%", math.floor(vol or 0))
         end),
         width_chars = 4,
         xalign = 1,
@@ -84,7 +130,6 @@ end
 
 local function AudioOutputs()
   local audio = Wp.get_default().audio
-  local device = audio.default_speaker
 
   return Widget.Box({
     class_name = "audio-outputs",
@@ -102,7 +147,7 @@ local function AudioOutputs()
         Widget.Box({
           hexpand = true,
           Widget.Label({
-            label = "Output", -- Static "Output" label
+            label = "Output",
             xalign = 0,
           }),
         }),
@@ -150,7 +195,6 @@ end
 
 local function MicrophoneInputs()
   local audio = Wp.get_default().audio
-  local device = audio.default_microphone
 
   return Widget.Box({
     class_name = "microphone-inputs",
@@ -168,7 +212,7 @@ local function MicrophoneInputs()
         Widget.Box({
           hexpand = true,
           Widget.Label({
-            label = "Input", -- Static "Input" label
+            label = "Input",
             xalign = 0,
           }),
         }),

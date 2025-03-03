@@ -1,6 +1,5 @@
 local astal = require("astal")
 local Widget = require("astal.gtk3").Widget
-local Gtk = require("astal.gtk3").Gtk
 local Wp = astal.require("AstalWp")
 local bind = astal.bind
 
@@ -72,6 +71,9 @@ local function create_osd_widget(current_timeout_ref)
       end
 
       local function show_osd(widget)
+        if _G.AUDIO_CONTROL_UPDATING then
+          return
+        end
         hide_all()
         widget.visible = true
 

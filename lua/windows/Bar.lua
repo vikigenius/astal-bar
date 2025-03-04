@@ -15,6 +15,25 @@ local Vitals = require("lua.widgets.Vitals")
 
 local map = require("lua.lib.common").map
 
+local active_variables = {}
+
+local function safe_bind(obj, prop)
+	if not obj then
+		return nil
+	end
+
+	local success, binding = pcall(function()
+		return bind(obj, prop)
+	end)
+
+	if not success then
+		print("Binding failed:", binding)
+		return nil
+	end
+
+	return binding
+end
+
 local function SysTray()
 	local tray = Tray.get_default()
 
@@ -43,17 +62,17 @@ local function Media()
 
 	return Widget.Box({
 		class_name = "Media",
-		visible = bind(player, "available"),
+		visible = safe_bind(player, "available"),
 		Widget.Box({
 			class_name = "Cover",
 			valign = "CENTER",
-			css = bind(player, "cover-art"):as(function(cover)
-				return "background-image: url('" .. (cover or "") .. "');"
+			css = safe_bind(player, "cover-art"):as(function(cover)
+				return cover and "background-image: url('" .. cover .. "');" or ""
 			end),
 		}),
 		Widget.Label({
-			label = bind(player, "metadata"):as(function()
-				return (player.title or "") .. " - " .. (player.artist or "")
+			label = safe_bind(player, "metadata"):as(function()
+				return string.format("%s - %s", player.title or "", player.artist or "")
 			end),
 		}),
 	})
@@ -61,21 +80,33 @@ end
 
 local function Time(format)
 	local time = Variable(""):poll(1000, function()
-		return GLib.DateTime.new_now_local():format(format)
+		local success, datetime = pcall(function()
+			return GLib.DateTime.new_now_local():format(format)
+		end)
+		return success and datetime or ""
 	end)
+
+	table.insert(active_variables, time)
 
 	return Widget.Label({
 		class_name = "Time",
 		on_destroy = function()
 			time:drop()
+			for i, v in ipairs(active_variables) do
+				if v == time then
+					table.remove(active_variables, i)
+					break
+				end
+			end
 		end,
 		label = time(),
 	})
 end
 
 local function AudioControl()
-	local speaker = Wp.get_default().audio.default_speaker
-	local mic = Wp.get_default().audio.default_microphone
+	local audio = Wp.get_default().audio
+	local speaker = audio and audio.default_speaker
+	local mic = audio and audio.default_microphone
 	local window_visible = false
 	local audio_window = nil
 
@@ -99,16 +130,16 @@ local function AudioControl()
 		Widget.Box({
 			spacing = 10,
 			Widget.Icon({
-				icon = bind(mic, "volume-icon"),
-				tooltip_text = bind(mic, "volume"):as(function(v)
-					return string.format("Microphone Volume: %.0f%%", v * 100)
+				icon = safe_bind(mic, "volume-icon"),
+				tooltip_text = safe_bind(mic, "volume"):as(function(v)
+					return string.format("Microphone Volume: %.0f%%", (v or 0) * 100)
 				end),
 			}),
 			Widget.Icon({
-				tooltip_text = bind(speaker, "volume"):as(function(v)
-					return string.format("Audio Volume: %.0f%%", v * 100)
+				tooltip_text = safe_bind(speaker, "volume"):as(function(v)
+					return string.format("Audio Volume: %.0f%%", (v or 0) * 100)
 				end),
-				icon = bind(speaker, "volume-icon"),
+				icon = safe_bind(speaker, "volume-icon"),
 			}),
 		}),
 	})
@@ -190,11 +221,19 @@ end
 return function(gdkmonitor)
 	local Anchor = astal.require("Astal").WindowAnchor
 
-	return Widget.Window({
+	local bar = Widget.Window({
 		class_name = "Bar",
 		gdkmonitor = gdkmonitor,
 		anchor = Anchor.TOP + Anchor.LEFT + Anchor.RIGHT,
 		exclusivity = "EXCLUSIVE",
+		on_destroy = function()
+			for _, var in ipairs(active_variables) do
+				if var.drop then
+					var:drop()
+				end
+			end
+			active_variables = {}
+		end,
 		Widget.CenterBox({
 			Widget.Box({
 				halign = "START",
@@ -215,4 +254,6 @@ return function(gdkmonitor)
 			}),
 		}),
 	})
+
+	return bar
 end

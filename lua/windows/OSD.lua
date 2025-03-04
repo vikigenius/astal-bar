@@ -119,7 +119,7 @@ return function(gdkmonitor)
 		create_osd_widget(current_timeout_ref),
 		on_destroy = function()
 			if current_timeout_ref.timer then
-				current_timeout_ref.timer:cancel()
+				current_timeout_ref.timer = nil
 			end
 		end,
 	})

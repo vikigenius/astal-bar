@@ -241,7 +241,7 @@ return function(gdkmonitor)
 				ActiveClient(),
 			}),
 			Widget.Box({
-				Time("%B %d, %H:%M"),
+				Time("%A %d, %H:%M"),
 				Media(),
 			}),
 			Widget.Box({

@@ -5,18 +5,29 @@ local Debug = require("lua.lib.debug")
 
 local CACHE_DIR = GLib.get_user_cache_dir() .. "/astal"
 local CACHE_FILE = CACHE_DIR .. "/github-events.json"
-local CACHE_EXPIRY = 5 * 60
+local CACHE_MIN_LIFETIME = 60
+local CACHE_MAX_LIFETIME = 300
 local POLL_INTERVAL = 300000
+local MAX_RETRIES = 3
+local RETRY_DELAY = 10
+local RATE_CHECK_INTERVAL = 900
+
+local last_rate_check = 0
+local last_rate_status = true
+local last_rate_remaining = 60
 
 local Github = {
 	get_events = nil,
 	format_time = nil,
-	CACHE_EXPIRY = CACHE_EXPIRY,
 	POLL_INTERVAL = POLL_INTERVAL,
 }
 
 local config_path = debug.getinfo(1).source:match("@?(.*/)") .. "../../user-variables.lua"
 local user_vars = loadfile(config_path)()
+
+local function exponential_backoff(attempt)
+	return RETRY_DELAY * (2 ^ (attempt - 1))
+end
 
 local function ensure_cache_dir()
 	if not GLib.file_test(CACHE_DIR, "EXISTS") then
@@ -25,6 +36,8 @@ local function ensure_cache_dir()
 end
 
 local function load_cache()
+	Debug.debug("GitHub", "Attempting to load cache")
+
 	if not GLib.file_test(CACHE_FILE, "EXISTS") then
 		return nil
 	end
@@ -34,27 +47,29 @@ local function load_cache()
 		return nil
 	end
 
-	local success, cache = pcall(cjson.decode, content)
-	if not success then
-		if GLib.file_test(CACHE_FILE, "EXISTS") then
-			os.remove(CACHE_FILE)
-		end
+	local parse_success, cache = pcall(cjson.decode, content)
+	if not parse_success or type(cache) ~= "table" then
 		return nil
 	end
 
-	if os.time() - (cache.timestamp or 0) > CACHE_EXPIRY then
-		if GLib.file_test(CACHE_FILE, "EXISTS") then
-			os.remove(CACHE_FILE)
-		end
-		return nil
+	local age = os.time() - (cache.timestamp or 0)
+	if age < CACHE_MIN_LIFETIME then
+		Debug.debug("GitHub", "Cache is fresh (age: %d seconds)", age)
+		return cache.events, false
+	elseif age > CACHE_MAX_LIFETIME then
+		Debug.debug("GitHub", "Cache is expired (age: %d seconds)", age)
+		return cache.events, true
 	end
 
-	return cache.events
+	return cache.events, false
 end
 
 local function save_cache(events)
-	ensure_cache_dir()
+	if not events or type(events) ~= "table" then
+		return false
+	end
 
+	ensure_cache_dir()
 	local cache = {
 		timestamp = os.time(),
 		events = events,
@@ -65,75 +80,92 @@ local function save_cache(events)
 		return false
 	end
 
-	if not GLib.file_test(CACHE_FILE, "EXISTS") then
-		astal.write_file(CACHE_FILE, "")
+	local temp_file = CACHE_FILE .. ".tmp"
+	local write_success = pcall(function()
+		astal.write_file(temp_file, encoded)
+	end)
+
+	if not write_success then
+		pcall(os.remove, temp_file)
+		return false
 	end
 
-	return astal.write_file(CACHE_FILE, encoded)
+	local rename_success = pcall(function()
+		os.rename(temp_file, CACHE_FILE)
+	end)
+
+	if not rename_success then
+		pcall(os.remove, temp_file)
+		return false
+	end
+
+	return true
 end
 
-local function fetch_with_wget(url)
-	Debug.debug("GitHub", "Starting wget fetch")
-	local temp_file = os.tmpname()
-	Debug.debug("GitHub", "Using temporary file: %s", temp_file)
-
-	local wget_cmd = {
-		"wget",
-		"--quiet",
-		"--timeout=5",
-		"--header=Accept: application/vnd.github+json",
-		"--header=User-Agent: astal-bar",
-		"-O",
-		temp_file,
-		url,
-	}
-
-	local _, err = astal.exec(wget_cmd)
-	if err then
-		Debug.error("GitHub", "Wget error: %s", err)
-		os.remove(temp_file)
-		return nil
+local function check_rate_limit()
+	local current_time = os.time()
+	if current_time - last_rate_check < RATE_CHECK_INTERVAL then
+		Debug.debug("GitHub", "Using cached rate limit status (remaining: %d)", last_rate_remaining)
+		return last_rate_status
 	end
 
-	local file = io.open(temp_file, "r")
-	if not file then
-		Debug.error("GitHub", "Failed to read wget output file")
-		os.remove(temp_file)
-		return nil
+	Debug.debug("GitHub", "Performing fresh rate limit check")
+	local rate_limit_check = astal.exec({
+		"curl",
+		"-sI",
+		"https://api.github.com/rate_limit",
+		"-H",
+		"Accept: application/vnd.github+json",
+	})
+
+	if rate_limit_check then
+		local remaining = tonumber(rate_limit_check:match("x%-ratelimit%-remaining: (%d+)"))
+		if remaining then
+			last_rate_remaining = remaining
+			Debug.debug("GitHub", "Rate limit remaining: %d", remaining)
+			if remaining < 10 then
+				last_rate_status = false
+				last_rate_check = current_time
+				return false
+			end
+		end
 	end
 
-	Debug.debug("GitHub", "Reading wget response")
-	local content = file:read("*all")
-	file:close()
-	os.remove(temp_file)
-
-	if not content or content == "" then
-		Debug.error("GitHub", "Empty response from wget")
-		return nil
-	end
-
-	Debug.debug("GitHub", "Wget fetch completed successfully")
-	return content
+	last_rate_status = true
+	last_rate_check = current_time
+	return true
 end
 
-local function fetch_github_events(username)
-	Debug.info("GitHub", "Fetching GitHub events for user: %s", username)
+local function fetch_github_events(username, attempt)
+	attempt = attempt or 1
+	Debug.debug("GitHub", "Starting fetch attempt %d for user %s", attempt, username)
+
+	if attempt > MAX_RETRIES then
+		Debug.warn("GitHub", "Max retries reached, aborting fetch")
+		return nil, "max_retries"
+	end
+
+	if not check_rate_limit() then
+		Debug.warn("GitHub", "Rate limit nearly exceeded, backing off")
+		return nil, "rate_limit"
+	end
+
 	local url = string.format("https://api.github.com/users/%s/received_events", username)
-	Debug.debug("GitHub", "Request URL: %s", url)
+	Debug.debug("GitHub", "Fetching from URL: %s", url)
 
 	local curl_cmd = {
 		"curl",
-		"-s", -- silent
-		"-S", -- show errors
-		"--compressed", -- handle compression
+		"-s",
+		"-S",
+		"--compressed",
 		"--max-time",
-		"5", -- timeout
+		"5",
 		"-H",
 		"Accept: application/json",
 		"-H",
 		"Accept-Encoding: gzip, deflate, br",
 		"-H",
-		"User-Agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36",
+		"User-Agent: astal-bar",
 		"-H",
 		"Connection: keep-alive",
 		url,
@@ -141,69 +173,26 @@ local function fetch_github_events(username)
 
 	Debug.debug("GitHub", "Executing curl request")
 	local output = astal.exec(curl_cmd)
-
 	if not output then
-		Debug.warn("GitHub", "Curl failed, attempting wget")
-		Debug.debug("GitHub", "Starting wget fallback")
-		output = fetch_with_wget(url)
-		Debug.debug("GitHub", "Wget attempt completed")
+		Debug.warn("GitHub", "Request failed")
+		if attempt < MAX_RETRIES then
+			local delay = exponential_backoff(attempt)
+			Debug.debug("GitHub", "Retrying in %d seconds", delay)
+			astal.sleep(exponential_backoff(attempt))
+			return fetch_github_events(username, attempt + 1)
+		end
+		return nil, "network_error"
 	end
 
-	if not output then
-		Debug.error("GitHub", "Both curl and wget failed")
-		return nil
-	end
-
-	Debug.debug("GitHub", "Parsing JSON response")
+	Debug.debug("GitHub", "Parsing response")
 	local success, events = pcall(cjson.decode, output)
-	if not success then
-		Debug.error("GitHub", "Failed to parse JSON response: %s", events)
-		Debug.debug("GitHub", "Raw response: %s", output:sub(1, 100))
-		return nil
-	end
-
-	if type(events) ~= "table" then
-		Debug.error("GitHub", "Unexpected response type: %s", type(events))
-		return nil
+	if not success or type(events) ~= "table" then
+		Debug.error("GitHub", "Failed to parse response: %s", success and "invalid format" or events)
+		return nil, "parse_error"
 	end
 
 	Debug.info("GitHub", "Successfully fetched %d events", #events)
 	return events
-end
-
-local function check_network()
-	Debug.debug("GitHub", "Checking network connectivity")
-	local curl_cmd = {
-		"curl",
-		"-s",
-		"--compressed",
-		"-m",
-		"2",
-		"-H",
-		"Accept: application/json",
-		"-H",
-		"Accept-Encoding: gzip, deflate, br",
-		"-H",
-		"User-Agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36",
-		"-H",
-		"Connection: keep-alive",
-		"--head",
-		"https://api.github.com",
-	}
-
-	local output = astal.exec(curl_cmd)
-	if not output then
-		Debug.error("GitHub", "Network check failed - no response")
-		return false
-	end
-
-	if not output:match("^HTTP/[%d%.]+ 200") then
-		Debug.error("GitHub", "Network check failed - bad response")
-		return false
-	end
-
-	Debug.debug("GitHub", "Network check successful")
-	return true
 end
 
 local function filter_events(events)
@@ -226,36 +215,35 @@ local function filter_events(events)
 end
 
 function Github.get_events()
+	Debug.debug("GitHub", "Starting events fetch process")
 	ensure_cache_dir()
 
-	Debug.debug("GitHub", "Starting events fetch process")
-
-	local cached_events = load_cache()
-	if cached_events then
-		Debug.info("GitHub", "Using cached events")
+	local cached_events, is_expired = load_cache()
+	if cached_events and not is_expired then
+		Debug.info("GitHub", "Using valid cache with %d events", #cached_events)
 		return filter_events(cached_events)
 	end
 
-	if not check_network() then
-		Debug.warn("GitHub", "Network appears to be down")
-		return {}
-	end
-
 	local username = user_vars.github and user_vars.github.username or "linuxmobile"
-	Debug.debug("GitHub", "Attempting to fetch events for: %s", username)
+	Debug.debug("GitHub", "Fetching fresh events for user: %s", username)
 
-	local events = fetch_github_events(username)
+	local events, error_type = fetch_github_events(username)
 
 	if events and #events > 0 then
-		Debug.debug("GitHub", "Saving events to cache")
+		Debug.debug("GitHub", "Saving %d events to cache", #events)
 		save_cache(events)
 		local filtered = filter_events(events)
 		Debug.info("GitHub", "Returning %d filtered events", #filtered)
 		return filtered
 	end
 
-	Debug.warn("GitHub", "No events found, returning empty list")
-	return {}
+	if error_type == "rate_limit" and cached_events then
+		Debug.warn("GitHub", "Rate limited, falling back to cache")
+		return filter_events(cached_events)
+	end
+
+	Debug.warn("GitHub", "No events available, returning empty or cached list")
+	return cached_events and filter_events(cached_events) or {}
 end
 
 function Github.format_time(iso_time)

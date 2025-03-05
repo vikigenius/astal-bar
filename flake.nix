@@ -38,6 +38,8 @@
           dart-sass
           inotify-tools
           brightnessctl
+          wget
+          curl
         ])
         ++ (with pkgs.lua52Packages; [
           cjson

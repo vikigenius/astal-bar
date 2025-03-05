@@ -37,7 +37,19 @@ local function LoadingIndicator()
 		halign = "CENTER",
 		vexpand = true,
 		Widget.Label({
-			label = "Fetching GitHub events...",
+			label = "Loading GitHub events...",
+		}),
+	})
+end
+
+local function ErrorIndicator()
+	return Widget.Box({
+		class_name = "error-indicator",
+		valign = "CENTER",
+		halign = "CENTER",
+		vexpand = true,
+		Widget.Label({
+			label = "Failed to fetch events",
 		}),
 	})
 end
@@ -91,7 +103,11 @@ local function GithubFeed(close_window)
 	local events = Variable({}):poll(Github.POLL_INTERVAL, function()
 		local github_events = Github.get_events()
 		if not github_events then
-			return {}
+			return { error = true }
+		end
+
+		if #github_events == 0 then
+			return { empty = true }
 		end
 
 		return map(github_events, function(event)
@@ -114,7 +130,10 @@ local function GithubFeed(close_window)
 			orientation = "VERTICAL",
 			spacing = 8,
 			bind(events):as(function(evt)
-				if #evt == 0 then
+				if evt.error then
+					return ErrorIndicator()
+				end
+				if evt.empty or #evt == 0 then
 					return LoadingIndicator()
 				end
 				return Widget.Box({

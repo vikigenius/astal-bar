@@ -15,15 +15,12 @@ local function NotificationMap()
 	local notif_map = notif_service.varmap({})
 
 	notifd.on_notified = function(_, id)
+		local notification = notifd:get_notification(id)
+
 		notif_map.set(
 			id,
 			Notification({
-				notification = notifd:get_notification(id),
-				-- once hovering over the notification is done
-				-- destroy the widget without calling notification.dismiss()
-				-- so that it acts as a "popup" and we can still display it
-				-- in a notification center like widget
-				-- but clicking on the close button will close it
+				notification = notification,
 				on_hover_lost = function()
 					notif_map.delete(id)
 				end,

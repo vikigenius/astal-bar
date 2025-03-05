@@ -47,7 +47,7 @@ local function get_active_window()
 end
 
 local function ActiveClientWidget()
-	local active_window = Variable({}):poll(500, function()
+	local active_window = Variable({}):poll(400, function()
 		return get_active_window() or {}
 	end)
 

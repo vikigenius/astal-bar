@@ -50,7 +50,6 @@ local function AirplaneMode()
 			active = bind(airplane_mode),
 			on_state_set = function(_, state)
 				if state then
-					-- Enable airplane mode
 					wifi.enabled = false
 					is_enabled:set(false)
 				end

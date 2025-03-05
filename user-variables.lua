@@ -10,4 +10,7 @@ return {
 			"resources",
 		},
 	},
+	github = {
+    username = "linuxmobile",
+  },
 }

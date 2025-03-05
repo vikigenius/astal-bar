@@ -1,0 +1,101 @@
+@use "../abstracts" as *;
+
+window.GithubWindow {
+  background: transparent;
+
+  > box {
+    background-color: $surface0;
+    border-radius: to-rem(12px);
+    border: to-rem(1px) solid gtkalpha($border, 0.2);
+    min-width: to-rem(350px);
+    margin: to-rem(10px);
+    padding: to-rem(16px);
+
+    .header {
+      padding: to-rem(4px) to-rem(8px);
+      margin-bottom: to-rem(12px);
+
+      icon {
+        color: $text;
+        font-size: to-rem(20px);
+      }
+
+      label {
+        color: $text;
+        font-size: to-rem(16px);
+        font-weight: 600;
+      }
+
+      .close-button {
+        padding: to-rem(4px);
+        border-radius: to-rem(8px);
+        background-color: transparent;
+        transition: all 200ms ease;
+
+        &:hover {
+          background-color: gtkalpha($red, 0.2);
+
+          icon {
+            color: $red;
+          }
+        }
+      }
+    }
+
+    .github-feed {
+      min-height: to-rem(300px);
+      &,
+      scrolledwindow {
+        border: none;
+        outline: none;
+        box-shadow: none;
+        -gtk-outline-radius: 0;
+      }
+
+      viewport {
+        border: none;
+        outline: none;
+      }
+
+      .github-event-item {
+        padding: to-rem(12px);
+        border-radius: to-rem(8px);
+        background-color: transparent;
+        transition: all 200ms ease;
+        margin: to-rem(2px) 0;
+
+        &:hover {
+          background-color: gtkalpha($surface2, 0.8);
+        }
+
+        .avatar-image {
+          border-radius: to-rem(8px);
+          min-width: to-rem(40px);
+          min-height: to-rem(40px);
+          margin-right: to-rem(4px);
+        }
+
+        .actor-name {
+          color: $primary;
+          font-weight: 600;
+          font-size: to-rem(14px);
+        }
+
+        .event-type {
+          color: $subtext1;
+          font-size: to-rem(14px);
+        }
+
+        .repo-name {
+          color: $text;
+          font-size: to-rem(14px);
+        }
+
+        .event-time {
+          color: $subtext1;
+          font-size: to-rem(12px);
+        }
+      }
+    }
+  }
+}

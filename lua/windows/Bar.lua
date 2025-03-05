@@ -103,6 +103,34 @@ local function Time(format)
 	})
 end
 
+local function GithubActivity()
+	local window_visible = false
+	local github_window = nil
+
+	local function toggle_github_window()
+		if window_visible and github_window then
+			github_window:hide()
+			window_visible = false
+		else
+			if not github_window then
+				local GithubWindow = require("lua.windows.Github")
+				github_window = GithubWindow.new()
+			end
+			github_window:show_all()
+			window_visible = true
+		end
+	end
+
+	return Widget.Button({
+		class_name = "github-button",
+		on_clicked = toggle_github_window,
+		child = Widget.Icon({
+			icon = os.getenv("PWD") .. "/icons/github-symbolic.svg",
+			tooltip_text = "GitHub Activity",
+		}),
+	})
+end
+
 local function AudioControl()
 	local audio = Wp.get_default().audio
 	local speaker = audio and audio.default_speaker
@@ -246,6 +274,7 @@ return function(gdkmonitor)
 			}),
 			Widget.Box({
 				halign = "END",
+				GithubActivity(),
 				Vitals(),
 				SysTray(),
 				AudioControl(),

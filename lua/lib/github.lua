@@ -118,17 +118,25 @@ local function check_rate_limit()
 	end
 
 	Debug.debug("GitHub", "Performing fresh rate limit check")
-	local success, rate_limit_check = pcall(astal.exec, {
+
+	local curl_cmd = table.concat({
 		"curl",
 		"-s",
-		"--connect-timeout",
-		"3",
-		"--max-time",
-		"5",
+		"--connect-timeout 3",
+		"--max-time 5",
 		"https://api.github.com/rate_limit",
-		"-H",
-		"Accept: application/vnd.github+json",
-	})
+		"-H 'Accept: application/vnd.github+json'",
+	}, " ")
+
+	local success, rate_limit_check = pcall(function()
+		local handle = io.popen(curl_cmd)
+		if not handle then
+			return nil
+		end
+		local result = handle:read("*a")
+		handle:close()
+		return result
+	end)
 
 	if not success or not rate_limit_check then
 		Debug.warn("GitHub", "Rate limit check failed, assuming limit reached")
@@ -176,28 +184,30 @@ local function fetch_github_events(username, attempt)
 	local url = string.format("https://api.github.com/users/%s/received_events", username)
 	Debug.debug("GitHub", "Fetching from URL: %s", url)
 
-	local curl_cmd = {
+	local curl_cmd = table.concat({
 		"curl",
 		"-s",
 		"-S",
-		"--connect-timeout",
-		"3",
-		"--max-time",
-		"5",
+		"--connect-timeout 3",
+		"--max-time 5",
 		"--compressed",
-		"-H",
-		"Accept: application/json",
-		"-H",
-		"Accept-Encoding: gzip, deflate, br",
-		"-H",
-		"User-Agent: astal-bar",
-		"-H",
-		"Connection: keep-alive",
-		url,
-	}
+		"-H 'Accept: application/json'",
+		"-H 'Accept-Encoding: gzip, deflate, br'",
+		"-H 'User-Agent: astal-bar'",
+		"-H 'Connection: keep-alive'",
+		"'" .. url .. "'",
+	}, " ")
 
 	Debug.debug("GitHub", "Executing curl request")
-	local success, output = pcall(astal.exec, curl_cmd)
+	local success, output = pcall(function()
+		local handle = io.popen(curl_cmd)
+		if not handle then
+			return nil
+		end
+		local result = handle:read("*a")
+		handle:close()
+		return result
+	end)
 
 	if not success then
 		Debug.warn("GitHub", "Request failed with error")

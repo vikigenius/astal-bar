@@ -3,6 +3,7 @@ local Variable = require("astal").Variable
 local Gtk = require("astal.gtk3").Gtk
 local GLib = astal.require("GLib")
 local Debug = require("lua.lib.debug")
+local Managers = require("lua.lib.managers")
 
 local M = {}
 
@@ -50,6 +51,7 @@ function M.varmap(initial)
 
 	local map = initial
 	local var = Variable()
+	Managers.VariableManager.register(var)
 
 	local function notify()
 		local arr = {}
@@ -96,7 +98,14 @@ function M.varmap(initial)
 				Debug.error("Common", "No callback provided for varmap subscribe")
 				return nil
 			end
-			return var:subscribe(callback)
+			local subscription = var:subscribe(callback)
+			if subscription then
+				Managers.BindingManager.register(subscription)
+			end
+			return subscription
+		end,
+		drop = function()
+			Managers.VariableManager.cleanup(var)
 		end,
 	}, {
 		__call = function()

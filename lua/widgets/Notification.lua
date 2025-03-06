@@ -5,6 +5,7 @@ local map = require("lua.lib.common").map
 local time = require("lua.lib.common").time
 local file_exists = require("lua.lib.common").file_exists
 local Debug = require("lua.lib.debug")
+local Managers = require("lua.lib.managers")
 
 local function is_icon(icon)
 	if not icon then
@@ -24,6 +25,7 @@ return function(props)
 	end
 
 	local n = props.notification
+	Managers.VariableManager.register(n)
 
 	local image_path = nil
 	local app_icon = n:get_app_icon()
@@ -106,6 +108,31 @@ return function(props)
 		}),
 	})
 
+	local actions_box = #n:get_actions() > 0
+		and Widget.Box({
+			class_name = "actions",
+			map(n:get_actions(), function(action)
+				local label, id = action.label, action.id
+
+				return Widget.Button({
+					hexpand = true,
+					on_clicked = function()
+						local success, err = pcall(function()
+							return n:invoke(id)
+						end)
+						if not success then
+							Debug.error("Notification", "Failed to invoke action: %s", err)
+						end
+					end,
+					Widget.Label({
+						label = label,
+						halign = "CENTER",
+						hexpand = true,
+					}),
+				})
+			end),
+		})
+
 	return Widget.EventBox({
 		class_name = string.format("Notification %s", string.lower(n:get_urgency())),
 		setup = props.setup,
@@ -115,29 +142,11 @@ return function(props)
 			header,
 			Gtk.Separator({ visible = true }),
 			content,
-			#n:get_actions() > 0 and Widget.Box({
-				class_name = "actions",
-				map(n:get_actions(), function(action)
-					local label, id = action.label, action.id
-
-					return Widget.Button({
-						hexpand = true,
-						on_clicked = function()
-							local success, err = pcall(function()
-								return n:invoke(id)
-							end)
-							if not success then
-								Debug.error("Notification", "Failed to invoke action: %s", err)
-							end
-						end,
-						Widget.Label({
-							label = label,
-							halign = "CENTER",
-							hexpand = true,
-						}),
-					})
-				end),
-			}),
+			actions_box,
 		}),
+		on_destroy = function()
+			Managers.VariableManager.cleanup_all()
+			Managers.BindingManager.cleanup_all()
+		end,
 	})
 end

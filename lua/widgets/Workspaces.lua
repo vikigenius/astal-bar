@@ -5,6 +5,7 @@ local Variable = astal.Variable
 local map = require("lua.lib.common").map
 local cjson = require("cjson")
 local Debug = require("lua.lib.debug")
+local Managers = require("lua.lib.managers")
 
 local cached_monitors = nil
 local function get_niri_monitors()
@@ -158,12 +159,16 @@ end
 
 local function WorkspacesWidget()
 	local workspaces = Variable(process_workspace_data()):poll(250, process_workspace_data)
+	Managers.VariableManager.register(workspaces)
+
+	local workspaces_binding = bind(workspaces)
+	Managers.BindingManager.register(workspaces_binding)
 
 	return Widget.Box({
 		class_name = "Workspaces",
 		orientation = "HORIZONTAL",
 		spacing = 2,
-		bind(workspaces):as(function(ws)
+		workspaces_binding:as(function(ws)
 			local monitors = {}
 			for _, monitor in ipairs(ws) do
 				table.insert(
@@ -177,6 +182,10 @@ local function WorkspacesWidget()
 			end
 			return monitors
 		end),
+		on_destroy = function()
+			Managers.BindingManager.cleanup_all()
+			Managers.VariableManager.cleanup_all()
+		end,
 	})
 end
 

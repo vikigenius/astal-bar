@@ -54,3 +54,17 @@ The battery conservation mode toggle switch experiences inconsistent active stat
 **Steps to Reproduce:**
 1. Toggle conservation mode
 2. Active state color occasionally fails to update
+
+---
+
+## GitHub Activity Module
+### Event Feed Display
+**Priority:** Low
+**Status:** Open
+**Component:** GitHub Module
+
+The GitHub activity module doesn't show instantly i open. We need to wait for a few seconds before the feed displays.
+
+**Steps to Reproduce:**
+1. Open the GitHub module
+2. Wait for a few seconds before the feed displays

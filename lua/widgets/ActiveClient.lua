@@ -5,6 +5,7 @@ local bind = astal.bind
 local cjson = require("cjson")
 local utf8 = require("lua-utf8")
 local Debug = require("lua.lib.debug")
+local Managers = require("lua.lib.managers")
 
 local function sanitize_utf8(text)
 	if not text then
@@ -54,26 +55,35 @@ local function ActiveClientWidget()
 		return get_active_window() or {}
 	end)
 
+	Managers.VariableManager.register(active_window)
+
+	local window_binding = bind(active_window)
+	Managers.BindingManager.register(window_binding)
+
 	return Widget.Box({
 		class_name = "ActiveClient",
 		Widget.Box({
 			orientation = "VERTICAL",
 			Widget.Label({
 				class_name = "app-id",
-				label = bind(active_window):as(function(window)
+				label = window_binding:as(function(window)
 					return sanitize_utf8(window.app_id or "Desktop")
 				end),
 				halign = "START",
 			}),
 			Widget.Label({
 				class_name = "window-title",
-				label = bind(active_window):as(function(window)
+				label = window_binding:as(function(window)
 					return truncate_text(window.title or "niri", 40)
 				end),
 				ellipsize = "END",
 				halign = "START",
 			}),
 		}),
+		on_destroy = function()
+			Managers.BindingManager.cleanup_all()
+			Managers.VariableManager.cleanup_all()
+		end,
 	})
 end
 

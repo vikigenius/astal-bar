@@ -1,6 +1,7 @@
 local astal = require("astal")
 local Variable = require("astal.variable")
 local Debug = require("lua.lib.debug")
+local Managers = require("lua.lib.managers")
 
 local Vitals = {}
 
@@ -11,6 +12,12 @@ function Vitals:New()
 		disk_usage = Variable(0),
 		temperature = Variable(0),
 	}
+
+	Managers.VariableManager.register(instance.cpu_usage)
+	Managers.VariableManager.register(instance.memory_usage)
+	Managers.VariableManager.register(instance.disk_usage)
+	Managers.VariableManager.register(instance.temperature)
+
 	setmetatable(instance, self)
 	self.__index = self
 	return instance
@@ -50,6 +57,19 @@ function Vitals:stop_monitoring()
 	end
 	if self._ram_timer then
 		self._ram_timer:cancel()
+	end
+
+	if self.cpu_usage then
+		Managers.VariableManager.cleanup(self.cpu_usage)
+	end
+	if self.memory_usage then
+		Managers.VariableManager.cleanup(self.memory_usage)
+	end
+	if self.disk_usage then
+		Managers.VariableManager.cleanup(self.disk_usage)
+	end
+	if self.temperature then
+		Managers.VariableManager.cleanup(self.temperature)
 	end
 end
 

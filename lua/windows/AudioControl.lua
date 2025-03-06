@@ -6,11 +6,15 @@ local Gtk = astal.require("Gtk")
 local Wp = astal.require("AstalWp")
 local Variable = astal.Variable
 local Debug = require("lua.lib.debug")
+local Managers = require("lua.lib.managers")
 
 _G.AUDIO_CONTROL_UPDATING = false
 
 local show_output_devices = Variable(false)
 local show_input_devices = Variable(false)
+
+Managers.VariableManager.register(show_output_devices)
+Managers.VariableManager.register(show_input_devices)
 
 local function create_volume_control(type)
 	local audio = Wp.get_default().audio
@@ -19,9 +23,14 @@ local function create_volume_control(type)
 		return Widget.Box({})
 	end
 
+	Managers.VariableManager.register(audio)
+
 	local device = audio["default_" .. type]
 	local volume_scale
 	local volume = Variable(device and device.volume * 100 or 0)
+
+	Managers.VariableManager.register(device)
+	Managers.VariableManager.register(volume)
 
 	volume_scale = Widget.Slider({
 		class_name = "volume-slider",
@@ -56,7 +65,10 @@ local function create_volume_control(type)
 	})
 
 	if device then
-		bind(device, "volume"):as(function(vol)
+		local volume_binding = bind(device, "volume")
+		Managers.BindingManager.register(volume_binding)
+
+		volume_binding:as(function(vol)
 			if vol then
 				volume:set(vol * 100)
 				if volume_scale and volume_scale.set_value then
@@ -82,13 +94,23 @@ local function create_volume_control(type)
 		end)
 	end
 
-	bind(audio, "default_" .. type):as(function(new_device)
+	local default_device_binding = bind(audio, "default_" .. type)
+	Managers.BindingManager.register(default_device_binding)
+
+	default_device_binding:as(function(new_device)
 		if new_device then
 			device = new_device
+			Managers.VariableManager.register(new_device)
 			volume:set(device.volume * 100)
 			volume_scale:set_value(device.volume * 100)
 		end
 	end)
+
+	local device_mute_binding = bind(device, "mute")
+	Managers.BindingManager.register(device_mute_binding)
+
+	local volume_binding = bind(volume)
+	Managers.BindingManager.register(volume_binding)
 
 	return Widget.Box({
 		orientation = "HORIZONTAL",
@@ -101,7 +123,7 @@ local function create_volume_control(type)
 				end
 			end,
 			child = Widget.Icon({
-				icon = bind(device, "mute"):as(function(mute)
+				icon = device_mute_binding:as(function(mute)
 					if type == "speaker" then
 						return mute and "audio-volume-muted-symbolic" or "audio-volume-high-symbolic"
 					else
@@ -116,7 +138,7 @@ local function create_volume_control(type)
 			hexpand = true,
 			volume_scale,
 			Widget.Label({
-				label = bind(volume, nil):as(function(vol)
+				label = volume_binding:as(function(vol)
 					return string.format("%d%%", math.floor(vol or 0))
 				end),
 				width_chars = 4,
@@ -143,6 +165,14 @@ local function AudioOutputs()
 		return Widget.Box({})
 	end
 
+	Managers.VariableManager.register(audio)
+
+	local show_devices_binding = bind(show_output_devices)
+	local speakers_binding = bind(audio, "speakers")
+
+	Managers.BindingManager.register(show_devices_binding)
+	Managers.BindingManager.register(speakers_binding)
+
 	return Widget.Box({
 		class_name = "audio-outputs",
 		orientation = "VERTICAL",
@@ -165,7 +195,7 @@ local function AudioOutputs()
 				}),
 				Widget.Icon({
 					icon = "pan-down-symbolic",
-					class_name = bind(show_output_devices, nil):as(function(shown)
+					class_name = show_devices_binding:as(function(shown)
 						return shown and "expanded" or ""
 					end),
 				}),
@@ -179,13 +209,14 @@ local function AudioOutputs()
 				orientation = "VERTICAL",
 				spacing = 5,
 				class_name = "device-list",
-				bind(audio, "speakers"):as(function(speakers)
+				speakers_binding:as(function(speakers)
 					if not speakers then
 						return {}
 					end
 
 					local buttons = {}
 					for _, speaker in ipairs(speakers) do
+						Managers.VariableManager.register(speaker)
 						table.insert(
 							buttons,
 							Widget.Button({
@@ -217,6 +248,14 @@ local function MicrophoneInputs()
 		return Widget.Box({})
 	end
 
+	Managers.VariableManager.register(audio)
+
+	local show_devices_binding = bind(show_input_devices)
+	local microphones_binding = bind(audio, "microphones")
+
+	Managers.BindingManager.register(show_devices_binding)
+	Managers.BindingManager.register(microphones_binding)
+
 	return Widget.Box({
 		class_name = "microphone-inputs",
 		orientation = "VERTICAL",
@@ -239,7 +278,7 @@ local function MicrophoneInputs()
 				}),
 				Widget.Icon({
 					icon = "pan-down-symbolic",
-					class_name = bind(show_input_devices, nil):as(function(shown)
+					class_name = show_devices_binding:as(function(shown)
 						return shown and "expanded" or ""
 					end),
 				}),
@@ -253,13 +292,14 @@ local function MicrophoneInputs()
 				orientation = "VERTICAL",
 				spacing = 5,
 				class_name = "device-list",
-				bind(audio, "microphones"):as(function(microphones)
+				microphones_binding:as(function(microphones)
 					if not microphones then
 						return {}
 					end
 
 					local buttons = {}
 					for _, mic in ipairs(microphones) do
+						Managers.VariableManager.register(mic)
 						table.insert(
 							buttons,
 							Widget.Button({
@@ -332,6 +372,10 @@ function AudioControlWindow.new(gdkmonitor)
 			MicrophoneInputs(),
 			Settings(close_window),
 		}),
+		on_destroy = function()
+			Managers.BindingManager.cleanup_all()
+			Managers.VariableManager.cleanup_all()
+		end,
 	})
 
 	return window

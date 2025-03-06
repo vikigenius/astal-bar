@@ -31,7 +31,7 @@
   - Event management
 
 ### GitHub Integration
-- [ ] Develop GitHub events module
+- [-] Develop GitHub events module
   - Utilize GitHub's free API
   - Display personal event feed
   - Activity tracking

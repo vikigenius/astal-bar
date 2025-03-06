@@ -4,6 +4,7 @@ local Apps = astal.require("AstalApps")
 local dock_config = require("lua.lib.dock-config")
 local GLib = astal.require("GLib")
 local Debug = require("lua.lib.debug")
+local Managers = require("lua.lib.managers")
 
 local function DockIcon(props)
 	if not props.icon then
@@ -38,6 +39,8 @@ local function DockContainer()
 		Debug.error("Dock", "Failed to initialize Apps service")
 		return nil
 	end
+
+	Managers.VariableManager.register(apps)
 
 	local container = Widget.Box({
 		class_name = "dock-container",
@@ -199,6 +202,9 @@ return function(gdkmonitor)
 				end,
 			}),
 		}),
+		on_destroy = function()
+			Managers.VariableManager.cleanup_all()
+		end,
 	})
 
 	local detector = Widget.Window({

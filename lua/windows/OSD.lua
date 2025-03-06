@@ -4,18 +4,25 @@ local Wp = astal.require("AstalWp")
 local bind = astal.bind
 local Debug = require("lua.lib.debug")
 local timeout = astal.timeout
+local Managers = require("lua.lib.managers")
 
 local SHOW_TIMEOUT = 1500
 
 local function create_volume_indicator(device, class_name)
+	local volume_icon_binding = bind(device, "volume-icon")
+	local volume_binding = bind(device, "volume")
+
+	Managers.BindingManager.register(volume_icon_binding)
+	Managers.BindingManager.register(volume_binding)
+
 	return Widget.Box({
 		class_name = class_name,
 		visible = false,
 		Widget.Box({
 			class_name = "indicator",
-			Widget.Icon({ icon = bind(device, "volume-icon") }),
+			Widget.Icon({ icon = volume_icon_binding }),
 			Widget.Label({
-				label = bind(device, "volume"):as(function(vol)
+				label = volume_binding:as(function(vol)
 					return string.format("%d%%", math.floor((vol or 0) * 100))
 				end),
 			}),
@@ -29,18 +36,21 @@ local function create_volume_indicator(device, class_name)
 				on_dragged = function(slider)
 					device.volume = slider.value
 				end,
-				value = bind(device, "volume"),
+				value = volume_binding,
 			}),
 		}),
 	})
 end
 
 local function create_mute_indicator(device, class_name)
+	local volume_icon_binding = bind(device, "volume-icon")
+	Managers.BindingManager.register(volume_icon_binding)
+
 	return Widget.Box({
 		class_name = class_name .. "-mute",
 		visible = false,
 		Widget.Icon({
-			icon = bind(device, "volume-icon"),
+			icon = volume_icon_binding,
 		}),
 		Widget.Label({
 			label = "Muted",
@@ -51,6 +61,9 @@ end
 local function create_osd_widget(current_timeout_ref)
 	local speaker = Wp.get_default().audio.default_speaker
 	local mic = Wp.get_default().audio.default_microphone
+
+	Managers.VariableManager.register(speaker)
+	Managers.VariableManager.register(mic)
 
 	if not speaker or not mic then
 		Debug.error(
@@ -99,19 +112,29 @@ local function create_osd_widget(current_timeout_ref)
 				end)
 			end
 
-			bind(speaker, "volume"):subscribe(function(vol)
+			local volume_binding = bind(speaker, "volume")
+			local mute_binding = bind(speaker, "mute")
+			local mic_volume_binding = bind(mic, "volume")
+			local mic_mute_binding = bind(mic, "mute")
+
+			Managers.BindingManager.register(volume_binding)
+			Managers.BindingManager.register(mute_binding)
+			Managers.BindingManager.register(mic_volume_binding)
+			Managers.BindingManager.register(mic_mute_binding)
+
+			volume_binding:subscribe(function(vol)
 				show_osd(speaker_vol)
 			end)
 
-			bind(speaker, "mute"):subscribe(function(muted)
+			mute_binding:subscribe(function(muted)
 				show_osd(muted and speaker_mute or speaker_vol)
 			end)
 
-			bind(mic, "volume"):subscribe(function(vol)
+			mic_volume_binding:subscribe(function(vol)
 				show_osd(mic_vol)
 			end)
 
-			bind(mic, "mute"):subscribe(function(muted)
+			mic_mute_binding:subscribe(function(muted)
 				show_osd(muted and mic_mute or mic_vol)
 			end)
 		end,
@@ -136,6 +159,8 @@ return function(gdkmonitor)
 			if current_timeout_ref.timer then
 				current_timeout_ref.timer = nil
 			end
+			Managers.BindingManager.cleanup_all()
+			Managers.VariableManager.cleanup_all()
 		end,
 	})
 end

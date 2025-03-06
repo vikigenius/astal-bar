@@ -2,6 +2,7 @@ local astal = require("astal")
 local Variable = require("astal.variable")
 local exec = astal.exec
 local Debug = require("lua.lib.debug")
+local Managers = require("lua.lib.managers")
 
 local Theme = {}
 
@@ -11,6 +12,8 @@ function Theme:New()
 	}
 	setmetatable(instance, self)
 	self.__index = self
+
+	Managers.VariableManager.register(instance.is_dark)
 
 	local current_theme = self:get_current_theme_mode()
 	if not current_theme then
@@ -48,6 +51,12 @@ function Theme:toggle_theme()
 	end
 
 	self.is_dark:set(new_state)
+end
+
+function Theme:cleanup()
+	if self.is_dark then
+		Managers.VariableManager.cleanup(self.is_dark)
+	end
 end
 
 local instance = nil

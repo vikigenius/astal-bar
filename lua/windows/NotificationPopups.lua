@@ -4,6 +4,7 @@ local Debug = require("lua.lib.debug")
 local Notifd = astal.require("AstalNotifd")
 local Notification = require("lua.widgets.Notification")
 local timeout = astal.timeout
+local Managers = require("lua.lib.managers")
 
 local notif_service = require("lua.lib.common")
 
@@ -16,6 +17,7 @@ end
 
 local function NotificationMap()
 	local notif_map = notif_service.varmap({})
+	Managers.VariableManager.register(notif_map)
 
 	notifd.on_notified = function(_, id)
 		local notification = notifd:get_notification(id)
@@ -23,6 +25,8 @@ local function NotificationMap()
 			Debug.error("NotificationPopups", "Failed to get notification with id: %d", id)
 			return
 		end
+
+		Managers.VariableManager.register(notification)
 
 		notif_map.set(
 			id,
@@ -64,5 +68,8 @@ return function(gdkmonitor)
 			vertical = true,
 			notifs(),
 		}),
+		on_destroy = function()
+			Managers.VariableManager.cleanup_all()
+		end,
 	})
 end

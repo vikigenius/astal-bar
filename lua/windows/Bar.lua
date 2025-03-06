@@ -9,6 +9,7 @@ local Network = astal.require("AstalNetwork")
 local Battery = astal.require("AstalBattery")
 local Wp = astal.require("AstalWp")
 local Debug = require("lua.lib.debug")
+local Managers = require("lua.lib.managers")
 
 local Workspaces = require("lua.widgets.Workspaces")
 local ActiveClient = require("lua.widgets.ActiveClient")
@@ -17,6 +18,10 @@ local Vitals = require("lua.widgets.Vitals")
 local map = require("lua.lib.common").map
 
 local active_variables = {}
+local github_window = nil
+local audio_window = nil
+local network_window = nil
+local battery_window = nil
 
 local function safe_bind(obj, prop)
 	if not obj then
@@ -32,24 +37,43 @@ local function safe_bind(obj, prop)
 		return nil
 	end
 
+	if binding then
+		Managers.BindingManager.register(binding)
+	end
+
 	return binding
 end
 
 local function SysTray()
 	local tray = Tray.get_default()
+	Managers.VariableManager.register(tray)
+
+	local tray_binding = bind(tray, "items")
+	Managers.BindingManager.register(tray_binding)
+
 	return Widget.Box({
 		class_name = "SysTray",
-		bind(tray, "items"):as(function(items)
+		tray_binding:as(function(items)
 			return map(items, function(item)
+				local tooltip_binding = bind(item, "tooltip_markup")
+				local menu_model_binding = bind(item, "menu-model")
+				local action_group_binding = bind(item, "action-group")
+				local gicon_binding = bind(item, "gicon")
+
+				Managers.BindingManager.register(tooltip_binding)
+				Managers.BindingManager.register(menu_model_binding)
+				Managers.BindingManager.register(action_group_binding)
+				Managers.BindingManager.register(gicon_binding)
+
 				return Widget.MenuButton({
-					tooltip_markup = bind(item, "tooltip_markup"),
+					tooltip_markup = tooltip_binding,
 					use_popover = false,
-					menu_model = bind(item, "menu-model"),
-					action_group = bind(item, "action-group"):as(function(ag)
+					menu_model = menu_model_binding,
+					action_group = action_group_binding:as(function(ag)
 						return { "dbusmenu", ag }
 					end),
 					Widget.Icon({
-						gicon = bind(item, "gicon"),
+						gicon = gicon_binding,
 					}),
 				})
 			end)
@@ -59,20 +83,26 @@ end
 
 local function Media()
 	local player = Mpris.Player.new("spotify")
+	Managers.VariableManager.register(player)
+
+	local available_binding = safe_bind(player, "available")
+	local cover_binding = safe_bind(player, "cover-art")
+	local metadata_binding = safe_bind(player, "metadata")
+
 	return Widget.Box({
 		class_name = "Media",
-		visible = safe_bind(player, "available"),
+		visible = available_binding,
 		Widget.Box({
 			class_name = "Cover",
 			valign = "CENTER",
-			css = safe_bind(player, "cover-art"):as(function(cover)
+			css = cover_binding and cover_binding:as(function(cover)
 				return cover and "background-image: url('" .. cover .. "');" or ""
-			end),
+			end) or "",
 		}),
 		Widget.Label({
-			label = safe_bind(player, "metadata"):as(function()
+			label = metadata_binding and metadata_binding:as(function()
 				return string.format("%s - %s", player.title or "", player.artist or "")
-			end),
+			end) or "",
 		}),
 	})
 end
@@ -86,6 +116,10 @@ local function Time(format)
 	end)
 
 	table.insert(active_variables, time)
+	Managers.VariableManager.register(time)
+
+	local time_binding = bind(time)
+	Managers.BindingManager.register(time_binding)
 
 	return Widget.Label({
 		class_name = "Time",
@@ -97,6 +131,8 @@ local function Time(format)
 					break
 				end
 			end
+			Managers.VariableManager.cleanup(time)
+			Managers.BindingManager.cleanup(time_binding)
 		end,
 		label = time(),
 	})
@@ -137,6 +173,10 @@ local function AudioControl(monitor)
 	local window_visible = false
 	local audio_window = nil
 
+	Managers.VariableManager.register(audio)
+	Managers.VariableManager.register(speaker)
+	Managers.VariableManager.register(mic)
+
 	local function toggle_audio_window()
 		if window_visible and audio_window then
 			audio_window:hide()
@@ -153,22 +193,27 @@ local function AudioControl(monitor)
 		end
 	end
 
+	local mic_volume_icon_binding = safe_bind(mic, "volume-icon")
+	local mic_volume_binding = safe_bind(mic, "volume")
+	local speaker_volume_binding = safe_bind(speaker, "volume")
+	local speaker_volume_icon_binding = safe_bind(speaker, "volume-icon")
+
 	return Widget.Button({
 		class_name = "audio-button",
 		on_clicked = toggle_audio_window,
 		Widget.Box({
 			spacing = 10,
 			Widget.Icon({
-				icon = safe_bind(mic, "volume-icon"),
-				tooltip_text = safe_bind(mic, "volume"):as(function(v)
+				icon = mic_volume_icon_binding,
+				tooltip_text = mic_volume_binding and mic_volume_binding:as(function(v)
 					return string.format("Microphone Volume: %.0f%%", (v or 0) * 100)
 				end),
 			}),
 			Widget.Icon({
-				tooltip_text = safe_bind(speaker, "volume"):as(function(v)
+				tooltip_text = speaker_volume_binding and speaker_volume_binding:as(function(v)
 					return string.format("Audio Volume: %.0f%%", (v or 0) * 100)
 				end),
-				icon = safe_bind(speaker, "volume-icon"),
+				icon = speaker_volume_icon_binding,
 			}),
 		}),
 	})
@@ -176,7 +221,11 @@ end
 
 local function Wifi(monitor)
 	local network = Network.get_default()
-	local wifi = bind(network, "wifi")
+	Managers.VariableManager.register(network)
+
+	local wifi_binding = bind(network, "wifi")
+	Managers.BindingManager.register(wifi_binding)
+
 	local window_visible = false
 	local network_window = nil
 
@@ -198,15 +247,21 @@ local function Wifi(monitor)
 
 	return Widget.Button({
 		class_name = "wifi-button",
-		visible = wifi:as(function(v)
+		visible = wifi_binding:as(function(v)
 			return v ~= nil
 		end),
 		on_clicked = toggle_network_window,
-		wifi:as(function(w)
+		wifi_binding:as(function(w)
+			local ssid_binding = bind(w, "ssid")
+			local icon_binding = bind(w, "icon-name")
+
+			Managers.BindingManager.register(ssid_binding)
+			Managers.BindingManager.register(icon_binding)
+
 			return Widget.Icon({
-				tooltip_text = bind(w, "ssid"):as(tostring),
+				tooltip_text = ssid_binding:as(tostring),
 				class_name = "Wifi",
-				icon = bind(w, "icon-name"),
+				icon = icon_binding,
 			})
 		end),
 	})
@@ -214,6 +269,16 @@ end
 
 local function BatteryLevel(monitor)
 	local bat = Battery.get_default()
+	Managers.VariableManager.register(bat)
+
+	local is_present_binding = bind(bat, "is-present")
+	local icon_binding = bind(bat, "battery-icon-name")
+	local percentage_binding = bind(bat, "percentage")
+
+	Managers.BindingManager.register(is_present_binding)
+	Managers.BindingManager.register(icon_binding)
+	Managers.BindingManager.register(percentage_binding)
+
 	local window_visible = false
 	local battery_window = nil
 
@@ -235,15 +300,15 @@ local function BatteryLevel(monitor)
 
 	return Widget.Button({
 		class_name = "battery-button",
-		visible = bind(bat, "is-present"),
+		visible = is_present_binding,
 		on_clicked = toggle_battery_window,
 		Widget.Box({
 			Widget.Icon({
-				icon = bind(bat, "battery-icon-name"),
+				icon = icon_binding,
 				css = "padding-right: 5pt;",
 			}),
 			Widget.Label({
-				label = bind(bat, "percentage"):as(function(p)
+				label = percentage_binding:as(function(p)
 					return tostring(math.floor(p * 100)) .. " %"
 				end),
 			}),
@@ -271,6 +336,22 @@ return function(gdkmonitor)
 				end
 			end
 			active_variables = {}
+
+			Managers.BindingManager.cleanup_all()
+			Managers.VariableManager.cleanup_all()
+
+			if github_window then
+				github_window:destroy()
+			end
+			if audio_window then
+				audio_window:destroy()
+			end
+			if network_window then
+				network_window:destroy()
+			end
+			if battery_window then
+				battery_window:destroy()
+			end
 		end,
 		Widget.CenterBox({
 			Widget.Box({

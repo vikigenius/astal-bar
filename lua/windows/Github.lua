@@ -5,6 +5,7 @@ local Variable = astal.Variable
 local GLib = astal.require("GLib")
 local map = require("lua.lib.common").map
 local Github = require("lua.lib.github")
+local Managers = require("lua.lib.managers")
 
 local function format_event_type(type)
 	return type:gsub("Event", ""):lower()
@@ -122,6 +123,10 @@ local function GithubFeed(close_window)
 		end)
 	end)
 
+	Managers.VariableManager.register(events)
+	local events_binding = bind(events)
+	Managers.BindingManager.register(events_binding)
+
 	return Widget.Scrollable({
 		vscrollbar_policy = "AUTOMATIC",
 		hscrollbar_policy = "NEVER",
@@ -129,7 +134,7 @@ local function GithubFeed(close_window)
 		child = Widget.Box({
 			orientation = "VERTICAL",
 			spacing = 8,
-			bind(events):as(function(evt)
+			events_binding:as(function(evt)
 				if evt.error then
 					return ErrorIndicator()
 				end
@@ -184,6 +189,10 @@ function GithubWindow.new(gdkmonitor)
 			}),
 			GithubFeed(close_window),
 		}),
+		on_destroy = function()
+			Managers.BindingManager.cleanup_all()
+			Managers.VariableManager.cleanup_all()
+		end,
 	})
 
 	return window

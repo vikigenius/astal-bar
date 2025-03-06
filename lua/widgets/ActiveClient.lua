@@ -5,7 +5,6 @@ local bind = astal.bind
 local cjson = require("cjson")
 local utf8 = require("lua-utf8")
 local Debug = require("lua.lib.debug")
-local Managers = require("lua.lib.managers")
 
 local function sanitize_utf8(text)
 	if not text then
@@ -51,14 +50,22 @@ local function get_active_window()
 end
 
 local function ActiveClientWidget()
-	local active_window = Variable({}):poll(400, function()
-		return get_active_window() or {}
+	local active_window = Variable.derive(
+		{ Variable({}):poll(400, function()
+			return get_active_window() or {}
+		end) },
+		function(window)
+			return window
+		end
+	)
+
+	local app_id_var = Variable.derive({ bind(active_window) }, function(window)
+		return sanitize_utf8(window.app_id or "Desktop")
 	end)
 
-	Managers.VariableManager.register(active_window)
-
-	local window_binding = bind(active_window)
-	Managers.BindingManager.register(window_binding)
+	local title_var = Variable.derive({ bind(active_window) }, function(window)
+		return truncate_text(window.title or "niri", 40)
+	end)
 
 	return Widget.Box({
 		class_name = "ActiveClient",
@@ -66,23 +73,20 @@ local function ActiveClientWidget()
 			orientation = "VERTICAL",
 			Widget.Label({
 				class_name = "app-id",
-				label = window_binding:as(function(window)
-					return sanitize_utf8(window.app_id or "Desktop")
-				end),
+				label = bind(app_id_var),
 				halign = "START",
 			}),
 			Widget.Label({
 				class_name = "window-title",
-				label = window_binding:as(function(window)
-					return truncate_text(window.title or "niri", 40)
-				end),
+				label = bind(title_var),
 				ellipsize = "END",
 				halign = "START",
 			}),
 		}),
 		on_destroy = function()
-			Managers.BindingManager.cleanup_all()
-			Managers.VariableManager.cleanup_all()
+			active_window:drop()
+			app_id_var:drop()
+			title_var:drop()
 		end,
 	})
 end

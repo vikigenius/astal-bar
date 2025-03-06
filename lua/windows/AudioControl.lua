@@ -6,15 +6,11 @@ local Gtk = astal.require("Gtk")
 local Wp = astal.require("AstalWp")
 local Variable = astal.Variable
 local Debug = require("lua.lib.debug")
-local Managers = require("lua.lib.managers")
 
 _G.AUDIO_CONTROL_UPDATING = false
 
 local show_output_devices = Variable(false)
 local show_input_devices = Variable(false)
-
-Managers.VariableManager.register(show_output_devices)
-Managers.VariableManager.register(show_input_devices)
 
 local function create_volume_control(type)
 	local audio = Wp.get_default().audio
@@ -23,98 +19,63 @@ local function create_volume_control(type)
 		return Widget.Box({})
 	end
 
-	Managers.VariableManager.register(audio)
-
 	local device = audio["default_" .. type]
-	local volume_scale
-	local volume = Variable(device and device.volume * 100 or 0)
+	if not device then
+		Debug.error("AudioControl", "No default " .. type .. " device found")
+		return Widget.Box({})
+	end
 
-	Managers.VariableManager.register(device)
-	Managers.VariableManager.register(volume)
+	local device_volume = Variable(device.volume * 100)
+	local device_mute = Variable(device.mute)
 
-	volume_scale = Widget.Slider({
+	local volume_scale = Widget.Slider({
 		class_name = "volume-slider",
 		draw_value = false,
 		hexpand = true,
 		width_request = 200,
 		orientation = Gtk.Orientation.HORIZONTAL,
-		value = volume(),
+		value = device_volume:get(),
 		adjustment = Gtk.Adjustment({
 			lower = 0,
 			upper = 100,
 			step_increment = 1,
 			page_increment = 10,
 		}),
-		on_realize = function(self)
-			if device then
-				self:set_value(device.volume * 100)
-			end
-		end,
 		on_value_changed = function(self)
 			if not device then
-				Debug.error("AudioControl", "No audio device available for volume control")
 				return
 			end
-
 			local new_value = self:get_value() / 100
 			if new_value >= 0 and new_value <= 1 then
+				_G.AUDIO_CONTROL_UPDATING = true
 				device.volume = new_value
-				volume:set(self:get_value())
+				device_volume:set(self:get_value())
+				_G.AUDIO_CONTROL_UPDATING = false
 			end
 		end,
 	})
 
-	if device then
-		local volume_binding = bind(device, "volume")
-		Managers.BindingManager.register(volume_binding)
-
-		volume_binding:as(function(vol)
-			if vol then
-				volume:set(vol * 100)
-				if volume_scale and volume_scale.set_value then
-					_G.AUDIO_CONTROL_UPDATING = true
-					volume_scale:set_value(vol * 100)
-					_G.AUDIO_CONTROL_UPDATING = false
-				end
-			end
-		end)
-
-		local last_vol = device.volume
-		GLib.timeout_add(GLib.PRIORITY_DEFAULT_IDLE, 100, function()
-			if device and device.volume and device.volume ~= last_vol then
-				last_vol = device.volume
-				_G.AUDIO_CONTROL_UPDATING = true
-				volume:set(last_vol * 100)
-				if volume_scale and volume_scale.set_value then
-					volume_scale:set_value(last_vol * 100)
-				end
-				_G.AUDIO_CONTROL_UPDATING = false
-			end
-			return true
-		end)
-	end
-
-	local default_device_binding = bind(audio, "default_" .. type)
-	Managers.BindingManager.register(default_device_binding)
-
-	default_device_binding:as(function(new_device)
-		if new_device then
-			device = new_device
-			Managers.VariableManager.register(new_device)
-			volume:set(device.volume * 100)
-			volume_scale:set_value(device.volume * 100)
-		end
-	end)
-
-	local device_mute_binding = bind(device, "mute")
-	Managers.BindingManager.register(device_mute_binding)
-
-	local volume_binding = bind(volume)
-	Managers.BindingManager.register(volume_binding)
-
 	return Widget.Box({
 		orientation = "HORIZONTAL",
 		spacing = 10,
+		setup = function(self)
+			self:hook(device, "notify::volume", function()
+				if not _G.AUDIO_CONTROL_UPDATING then
+					local new_value = device.volume * 100
+					device_volume:set(new_value)
+					volume_scale:set_value(new_value)
+				end
+			end)
+
+			self:hook(device, "notify::mute", function()
+				device_mute:set(device.mute)
+			end)
+
+			self:hook(self, "destroy", function()
+				device_volume:drop()
+				device_mute:drop()
+			end)
+		end,
 		Widget.Button({
 			class_name = "mute-button",
 			on_clicked = function()
@@ -123,11 +84,11 @@ local function create_volume_control(type)
 				end
 			end,
 			child = Widget.Icon({
-				icon = device_mute_binding:as(function(mute)
+				icon = bind(device_mute):as(function(muted)
 					if type == "speaker" then
-						return mute and "audio-volume-muted-symbolic" or "audio-volume-high-symbolic"
+						return muted and "audio-volume-muted-symbolic" or "audio-volume-high-symbolic"
 					else
-						return mute and "microphone-disabled-symbolic" or "microphone-sensitivity-high-symbolic"
+						return muted and "microphone-disabled-symbolic" or "microphone-sensitivity-high-symbolic"
 					end
 				end),
 			}),
@@ -138,7 +99,7 @@ local function create_volume_control(type)
 			hexpand = true,
 			volume_scale,
 			Widget.Label({
-				label = volume_binding:as(function(vol)
+				label = bind(device_volume):as(function(vol)
 					return string.format("%d%%", math.floor(vol or 0))
 				end),
 				width_chars = 4,
@@ -158,6 +119,29 @@ local function VolumeControls()
 	})
 end
 
+local function create_device_list(devices, icon_name)
+	local buttons = {}
+	for _, device in ipairs(devices or {}) do
+		table.insert(
+			buttons,
+			Widget.Button({
+				child = Widget.Box({
+					orientation = "HORIZONTAL",
+					spacing = 10,
+					Widget.Icon({ icon = icon_name }),
+					Widget.Label({
+						label = device.description or "Unknown Device",
+					}),
+				}),
+				on_clicked = function()
+					device:set_is_default(true)
+				end,
+			})
+		)
+	end
+	return buttons
+end
+
 local function AudioOutputs()
 	local audio = Wp.get_default().audio
 	if not audio then
@@ -165,18 +149,19 @@ local function AudioOutputs()
 		return Widget.Box({})
 	end
 
-	Managers.VariableManager.register(audio)
-
-	local show_devices_binding = bind(show_output_devices)
-	local speakers_binding = bind(audio, "speakers")
-
-	Managers.BindingManager.register(show_devices_binding)
-	Managers.BindingManager.register(speakers_binding)
+	local expanded_class = Variable.derive({ show_output_devices }, function(shown)
+		return shown and "expanded" or ""
+	end)
 
 	return Widget.Box({
 		class_name = "audio-outputs",
 		orientation = "VERTICAL",
 		spacing = 5,
+		setup = function(self)
+			self:hook(self, "destroy", function()
+				expanded_class:drop()
+			end)
+		end,
 		Widget.Button({
 			class_name = "device-selector",
 			on_clicked = function()
@@ -195,46 +180,20 @@ local function AudioOutputs()
 				}),
 				Widget.Icon({
 					icon = "pan-down-symbolic",
-					class_name = show_devices_binding:as(function(shown)
-						return shown and "expanded" or ""
-					end),
+					class_name = expanded_class(),
 				}),
 			}),
 		}),
 		Widget.Revealer({
 			transition_duration = 200,
 			transition_type = "SLIDE_DOWN",
-			reveal_child = show_output_devices(),
+			reveal_child = bind(show_output_devices),
 			child = Widget.Box({
 				orientation = "VERTICAL",
 				spacing = 5,
 				class_name = "device-list",
-				speakers_binding:as(function(speakers)
-					if not speakers then
-						return {}
-					end
-
-					local buttons = {}
-					for _, speaker in ipairs(speakers) do
-						Managers.VariableManager.register(speaker)
-						table.insert(
-							buttons,
-							Widget.Button({
-								child = Widget.Box({
-									orientation = "HORIZONTAL",
-									spacing = 10,
-									Widget.Icon({ icon = "audio-speakers-symbolic" }),
-									Widget.Label({
-										label = speaker.description or "Unknown Device",
-									}),
-								}),
-								on_clicked = function()
-									speaker:set_is_default(true)
-								end,
-							})
-						)
-					end
-					return buttons
+				bind(audio, "speakers"):as(function(speakers)
+					return create_device_list(speakers, "audio-speakers-symbolic")
 				end),
 			}),
 		}),
@@ -248,18 +207,19 @@ local function MicrophoneInputs()
 		return Widget.Box({})
 	end
 
-	Managers.VariableManager.register(audio)
-
-	local show_devices_binding = bind(show_input_devices)
-	local microphones_binding = bind(audio, "microphones")
-
-	Managers.BindingManager.register(show_devices_binding)
-	Managers.BindingManager.register(microphones_binding)
+	local expanded_class = Variable.derive({ show_input_devices }, function(shown)
+		return shown and "expanded" or ""
+	end)
 
 	return Widget.Box({
 		class_name = "microphone-inputs",
 		orientation = "VERTICAL",
 		spacing = 5,
+		setup = function(self)
+			self:hook(self, "destroy", function()
+				expanded_class:drop()
+			end)
+		end,
 		Widget.Button({
 			class_name = "device-selector",
 			on_clicked = function()
@@ -278,46 +238,20 @@ local function MicrophoneInputs()
 				}),
 				Widget.Icon({
 					icon = "pan-down-symbolic",
-					class_name = show_devices_binding:as(function(shown)
-						return shown and "expanded" or ""
-					end),
+					class_name = expanded_class(),
 				}),
 			}),
 		}),
 		Widget.Revealer({
 			transition_duration = 200,
 			transition_type = "SLIDE_DOWN",
-			reveal_child = show_input_devices(),
+			reveal_child = bind(show_input_devices),
 			child = Widget.Box({
 				orientation = "VERTICAL",
 				spacing = 5,
 				class_name = "device-list",
-				microphones_binding:as(function(microphones)
-					if not microphones then
-						return {}
-					end
-
-					local buttons = {}
-					for _, mic in ipairs(microphones) do
-						Managers.VariableManager.register(mic)
-						table.insert(
-							buttons,
-							Widget.Button({
-								child = Widget.Box({
-									orientation = "HORIZONTAL",
-									spacing = 10,
-									Widget.Icon({ icon = "audio-input-microphone-symbolic" }),
-									Widget.Label({
-										label = mic.description or "Unknown Device",
-									}),
-								}),
-								on_clicked = function()
-									mic:set_is_default(true)
-								end,
-							})
-						)
-					end
-					return buttons
+				bind(audio, "microphones"):as(function(microphones)
+					return create_device_list(microphones, "audio-input-microphone-symbolic")
 				end),
 			}),
 		}),
@@ -363,6 +297,12 @@ function AudioControlWindow.new(gdkmonitor)
 		class_name = "AudioControlWindow",
 		gdkmonitor = gdkmonitor,
 		anchor = Anchor.TOP + Anchor.RIGHT,
+		setup = function(self)
+			self:hook(self, "destroy", function()
+				show_output_devices:drop()
+				show_input_devices:drop()
+			end)
+		end,
 		child = Widget.Box({
 			orientation = "VERTICAL",
 			spacing = 15,
@@ -372,10 +312,6 @@ function AudioControlWindow.new(gdkmonitor)
 			MicrophoneInputs(),
 			Settings(close_window),
 		}),
-		on_destroy = function()
-			Managers.BindingManager.cleanup_all()
-			Managers.VariableManager.cleanup_all()
-		end,
 	})
 
 	return window

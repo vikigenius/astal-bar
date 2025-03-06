@@ -4,7 +4,7 @@ local Apps = astal.require("AstalApps")
 local dock_config = require("lua.lib.dock-config")
 local GLib = astal.require("GLib")
 local Debug = require("lua.lib.debug")
-local Managers = require("lua.lib.managers")
+local Variable = require("astal.variable")
 
 local function DockIcon(props)
 	if not props.icon then
@@ -40,85 +40,107 @@ local function DockContainer()
 		return nil
 	end
 
-	Managers.VariableManager.register(apps)
+	local apps_state = Variable({
+		available_apps = {},
+		running_apps = {},
+		pinned_apps = dock_config.pinned_apps,
+	})
 
 	local container = Widget.Box({
 		class_name = "dock-container",
 		spacing = 8,
 		homogeneous = false,
 		halign = "CENTER",
+		setup = function(self)
+			local function update_apps_state()
+				dock_config.update_running_apps()
+				local app_list = apps:get_list()
+				if not app_list then
+					Debug.error("Dock", "Failed to get application list")
+					return
+				end
+
+				local available_apps = {}
+				for _, app in ipairs(app_list) do
+					if app and app.entry then
+						available_apps[app.entry] = app
+					end
+				end
+
+				apps_state:set({
+					available_apps = available_apps,
+					running_apps = dock_config.running_apps,
+					pinned_apps = dock_config.pinned_apps,
+				})
+			end
+
+			local function update_dock_icons(state)
+				local children = self:get_children()
+				if children then
+					for _, child in ipairs(children) do
+						self:remove(child)
+					end
+				end
+
+				for _, desktop_entry in ipairs(state.pinned_apps) do
+					local app = state.available_apps[desktop_entry]
+					if app then
+						self:add(DockIcon({
+							icon = app.icon_name,
+							is_running = dock_config.is_running(desktop_entry),
+							desktop_entry = desktop_entry,
+							on_clicked = function()
+								Debug.info("Dock", "Launching pinned app: %s", desktop_entry)
+								if app.launch then
+									app:launch()
+								else
+									Debug.error("Dock", "App %s has no launch method", desktop_entry)
+								end
+							end,
+						}))
+					else
+						Debug.warn("Dock", "Pinned app not found: %s", desktop_entry)
+					end
+				end
+
+				for entry, app in pairs(state.available_apps) do
+					if dock_config.is_running(entry) and not dock_config.is_pinned(entry) then
+						Debug.debug("Dock", "Adding running app: %s", entry)
+						self:add(DockIcon({
+							icon = app.icon_name,
+							is_running = true,
+							desktop_entry = entry,
+							on_clicked = function()
+								Debug.info("Dock", "Launching running app: %s", entry)
+								if app.launch then
+									app:launch()
+								else
+									Debug.error("Dock", "App %s has no launch method", entry)
+								end
+							end,
+						}))
+					end
+				end
+			end
+
+			apps_state:subscribe(update_dock_icons)
+
+			local update_timeout = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 2000, function()
+				update_apps_state()
+				return GLib.SOURCE_CONTINUE
+			end)
+
+			self.on_destroy = function()
+				if update_timeout then
+					GLib.source_remove(update_timeout)
+				end
+				apps_state:drop()
+			end
+
+			update_apps_state()
+		end,
 	})
 
-	local function update_dock()
-		local children = container:get_children()
-		if children then
-			for _, child in ipairs(children) do
-				container:remove(child)
-			end
-		end
-
-		dock_config.update_running_apps()
-		local app_list = apps:get_list()
-		if not app_list then
-			Debug.error("Dock", "Failed to get application list")
-			return
-		end
-
-		local available_apps = {}
-
-		for _, app in ipairs(app_list) do
-			if app and app.entry then
-				available_apps[app.entry] = app
-			end
-		end
-
-		for _, desktop_entry in ipairs(dock_config.pinned_apps) do
-			local app = available_apps[desktop_entry]
-			if app then
-				container:add(DockIcon({
-					icon = app.icon_name,
-					is_running = dock_config.is_running(desktop_entry),
-					desktop_entry = desktop_entry,
-					on_clicked = function()
-						Debug.info("Dock", "Launching pinned app: %s", desktop_entry)
-						if app.launch then
-							app:launch()
-						else
-							Debug.error("Dock", "App %s has no launch method", desktop_entry)
-						end
-					end,
-				}))
-			else
-				Debug.warn("Dock", "Pinned app not found: %s", desktop_entry)
-			end
-		end
-
-		for entry, app in pairs(available_apps) do
-			if dock_config.is_running(entry) and not dock_config.is_pinned(entry) then
-				Debug.debug("Dock", "Adding running app: %s", entry)
-				container:add(DockIcon({
-					icon = app.icon_name,
-					is_running = true,
-					desktop_entry = entry,
-					on_clicked = function()
-						Debug.info("Dock", "Launching running app: %s", entry)
-						if app.launch then
-							app:launch()
-						else
-							Debug.error("Dock", "App %s has no launch method", entry)
-						end
-					end,
-				}))
-			end
-		end
-	end
-
-	GLib.timeout_add(GLib.PRIORITY_DEFAULT, 2000, function()
-		update_dock()
-		return GLib.SOURCE_CONTINUE
-	end)
-
-	update_dock()
 	return container
 end
 
@@ -143,27 +165,40 @@ return function(gdkmonitor)
 	end
 
 	local Anchor = astal.require("Astal").WindowAnchor
-	local hide_timeout = nil
+	local dock_state = Variable({
+		visible = true,
+		hide_timeout = nil,
+	})
+
 	local revealer = nil
 	local dock_window = nil
 
 	local function show_dock()
-		if revealer then
-			revealer.reveal_child = true
-		end
-		if dock_window then
-			dock_window:get_style_context():add_class("revealed")
-		end
+		dock_state:set({
+			visible = true,
+			hide_timeout = dock_state:get().hide_timeout,
+		})
 	end
 
 	local function hide_dock()
+		dock_state:set({
+			visible = false,
+			hide_timeout = nil,
+		})
+	end
+
+	dock_state:subscribe(function(state)
 		if revealer then
-			revealer.reveal_child = false
+			revealer.reveal_child = state.visible
 		end
 		if dock_window then
-			dock_window:get_style_context():remove_class("revealed")
+			if state.visible then
+				dock_window:get_style_context():add_class("revealed")
+			else
+				dock_window:get_style_context():remove_class("revealed")
+			end
 		end
-	end
+	end)
 
 	dock_window = Widget.Window({
 		class_name = "Dock",
@@ -172,19 +207,27 @@ return function(gdkmonitor)
 		Widget.EventBox({
 			on_hover_lost = function()
 				Debug.debug("Dock", "Hover lost, scheduling hide")
-				if hide_timeout then
-					GLib.source_remove(hide_timeout)
+				local current_state = dock_state:get()
+				if current_state.hide_timeout then
+					GLib.source_remove(current_state.hide_timeout)
 				end
-				hide_timeout = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 500, function()
+				local timeout = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 500, function()
 					hide_dock()
-					hide_timeout = nil
 					return GLib.SOURCE_REMOVE
 				end)
+				dock_state:set({
+					visible = current_state.visible,
+					hide_timeout = timeout,
+				})
 			end,
 			on_hover = function()
-				if hide_timeout then
-					GLib.source_remove(hide_timeout)
-					hide_timeout = nil
+				local current_state = dock_state:get()
+				if current_state.hide_timeout then
+					GLib.source_remove(current_state.hide_timeout)
+					dock_state:set({
+						visible = current_state.visible,
+						hide_timeout = nil,
+					})
 				end
 				show_dock()
 			end,
@@ -203,7 +246,7 @@ return function(gdkmonitor)
 			}),
 		}),
 		on_destroy = function()
-			Managers.VariableManager.cleanup_all()
+			dock_state:drop()
 		end,
 	})
 

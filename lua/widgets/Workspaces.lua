@@ -5,7 +5,6 @@ local Variable = astal.Variable
 local map = require("lua.lib.common").map
 local cjson = require("cjson")
 local Debug = require("lua.lib.debug")
-local Managers = require("lua.lib.managers")
 
 local cached_monitors = nil
 local function get_niri_monitors()
@@ -158,17 +157,33 @@ local function MonitorWorkspaces(props)
 end
 
 local function WorkspacesWidget()
-	local workspaces = Variable(process_workspace_data()):poll(250, process_workspace_data)
-	Managers.VariableManager.register(workspaces)
+	local workspace_data = Variable(process_workspace_data())
+	local monitors_var = Variable(get_niri_monitors())
 
-	local workspaces_binding = bind(workspaces)
-	Managers.BindingManager.register(workspaces_binding)
+	local workspaces = Variable.derive({ workspace_data, monitors_var }, function(ws_data, monitors)
+		if not ws_data or not monitors then
+			return {}
+		end
+		return ws_data
+	end)
+
+	workspace_data:poll(250, function()
+		local data = process_workspace_data()
+		workspace_data:set(data)
+		return data
+	end)
+
+	monitors_var:poll(5000, function()
+		local monitors = get_niri_monitors()
+		monitors_var:set(monitors)
+		return monitors
+	end)
 
 	return Widget.Box({
 		class_name = "Workspaces",
 		orientation = "HORIZONTAL",
 		spacing = 2,
-		workspaces_binding:as(function(ws)
+		bind(workspaces):as(function(ws)
 			local monitors = {}
 			for _, monitor in ipairs(ws) do
 				table.insert(
@@ -183,8 +198,9 @@ local function WorkspacesWidget()
 			return monitors
 		end),
 		on_destroy = function()
-			Managers.BindingManager.cleanup_all()
-			Managers.VariableManager.cleanup_all()
+			workspace_data:drop()
+			monitors_var:drop()
+			workspaces:drop()
 		end,
 	})
 end

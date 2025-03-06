@@ -2,14 +2,14 @@ local astal = require("astal")
 local Widget = require("astal.gtk3.widget")
 local bind = astal.bind
 local Vitals = require("lua.lib.vitals")
-local Managers = require("lua.lib.managers")
+local Debug = require("lua.lib.debug")
 
 local function CpuWidget()
 	local vitals = Vitals.get_default()
-	Managers.VariableManager.register(vitals)
-
-	local cpu_usage_binding = bind(vitals.cpu_usage)
-	Managers.BindingManager.register(cpu_usage_binding)
+	if not vitals then
+		Debug.error("VitalsWidget", "Failed to initialize vitals service for CPU widget")
+		return Widget.Box({})
+	end
 
 	return Widget.Box({
 		class_name = "cpu",
@@ -18,7 +18,7 @@ local function CpuWidget()
 			css = "padding-right: 5pt;",
 		}),
 		Widget.Label({
-			label = cpu_usage_binding:as(function(usage)
+			label = bind(vitals.cpu_usage):as(function(usage)
 				return string.format("%d%%", usage)
 			end),
 		}),
@@ -27,10 +27,10 @@ end
 
 local function MemoryWidget()
 	local vitals = Vitals.get_default()
-	Managers.VariableManager.register(vitals)
-
-	local memory_usage_binding = bind(vitals.memory_usage)
-	Managers.BindingManager.register(memory_usage_binding)
+	if not vitals then
+		Debug.error("VitalsWidget", "Failed to initialize vitals service for Memory widget")
+		return Widget.Box({})
+	end
 
 	return Widget.Box({
 		class_name = "memory",
@@ -39,7 +39,7 @@ local function MemoryWidget()
 			css = "padding-right: 5pt;",
 		}),
 		Widget.Label({
-			label = memory_usage_binding:as(function(usage)
+			label = bind(vitals.memory_usage):as(function(usage)
 				return string.format("%d%%", usage)
 			end),
 		}),
@@ -53,10 +53,6 @@ local function VitalsWidget()
 		spacing = 5,
 		MemoryWidget(),
 		CpuWidget(),
-		on_destroy = function()
-			Managers.BindingManager.cleanup_all()
-			Managers.VariableManager.cleanup_all()
-		end,
 	})
 end
 

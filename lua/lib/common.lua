@@ -3,7 +3,6 @@ local Variable = require("astal").Variable
 local Gtk = require("astal.gtk3").Gtk
 local GLib = astal.require("GLib")
 local Debug = require("lua.lib.debug")
-local Managers = require("lua.lib.managers")
 
 local M = {}
 
@@ -17,10 +16,6 @@ function M.src(path)
 	return src .. path
 end
 
----@generic T, R
----@param array T[]
----@param func fun(T, i: integer): R
----@return R[]
 function M.map(array, func)
 	if not array then
 		Debug.error("Common", "Nil array passed to map")
@@ -33,8 +28,6 @@ function M.map(array, func)
 	return new_arr
 end
 
----@param path string
----@return boolean
 function M.file_exists(path)
 	if not path then
 		Debug.error("Common", "No path provided for file_exists")
@@ -50,8 +43,7 @@ function M.varmap(initial)
 	end
 
 	local map = initial
-	local var = Variable()
-	Managers.VariableManager.register(var)
+	local var = Variable({})
 
 	local function notify()
 		local arr = {}
@@ -98,14 +90,10 @@ function M.varmap(initial)
 				Debug.error("Common", "No callback provided for varmap subscribe")
 				return nil
 			end
-			local subscription = var:subscribe(callback)
-			if subscription then
-				Managers.BindingManager.register(subscription)
-			end
-			return subscription
+			return var:subscribe(callback)
 		end,
 		drop = function()
-			Managers.VariableManager.cleanup(var)
+			var:drop()
 		end,
 	}, {
 		__call = function()
@@ -114,8 +102,6 @@ function M.varmap(initial)
 	})
 end
 
----@param time number
----@param format? string
 function M.time(time, format)
 	if not time then
 		Debug.error("Common", "No time provided for formatting")

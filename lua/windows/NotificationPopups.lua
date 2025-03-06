@@ -4,9 +4,8 @@ local Debug = require("lua.lib.debug")
 local Notifd = astal.require("AstalNotifd")
 local Notification = require("lua.widgets.Notification")
 local timeout = astal.timeout
-local Managers = require("lua.lib.managers")
-
-local notif_service = require("lua.lib.common")
+local Variable = astal.Variable
+local bind = astal.bind
 
 local TIMEOUT_DELAY = 5000
 
@@ -15,40 +14,61 @@ if not notifd then
 	Debug.error("NotificationPopups", "Failed to get notification daemon")
 end
 
-local function NotificationMap()
-	local notif_map = notif_service.varmap({})
-	Managers.VariableManager.register(notif_map)
+local function NotificationMap(parent)
+	local notifications = Variable({})
+	local notif_map = {}
 
-	notifd.on_notified = function(_, id)
+	local function update_notifications()
+		local arr = {}
+		for _, widget in pairs(notif_map) do
+			table.insert(arr, widget)
+		end
+		notifications:set(arr)
+	end
+
+	local function remove_notification(id)
+		if notif_map[id] then
+			if notif_map[id].destroy then
+				notif_map[id]:destroy()
+			end
+			notif_map[id] = nil
+			update_notifications()
+		end
+	end
+
+	parent:hook(notifd, "notified", function(_, id)
 		local notification = notifd:get_notification(id)
 		if not notification then
 			Debug.error("NotificationPopups", "Failed to get notification with id: %d", id)
 			return
 		end
 
-		Managers.VariableManager.register(notification)
+		local timer_var = Variable(0)
 
-		notif_map.set(
-			id,
-			Notification({
-				notification = notification,
-				on_hover_lost = function()
-					notif_map.delete(id)
-				end,
-				setup = function()
-					timeout(TIMEOUT_DELAY, function()
-						notif_map.delete(id)
-					end)
-				end,
-			})
-		)
-	end
+		notif_map[id] = Notification({
+			notification = notification,
+			on_hover_lost = function()
+				remove_notification(id)
+			end,
+			setup = function()
+				timer_var:subscribe(function()
+					remove_notification(id)
+				end)
 
-	notifd.on_resolved = function(_, id)
-		notif_map.delete(id)
-	end
+				timeout(TIMEOUT_DELAY, function()
+					timer_var:set(1)
+				end)
+			end,
+		})
 
-	return notif_map
+		update_notifications()
+	end)
+
+	parent:hook(notifd, "resolved", function(_, id)
+		remove_notification(id)
+	end)
+
+	return notifications
 end
 
 return function(gdkmonitor)
@@ -58,18 +78,17 @@ return function(gdkmonitor)
 	end
 
 	local Anchor = astal.require("Astal").WindowAnchor
-	local notifs = NotificationMap()
 
 	return Widget.Window({
 		class_name = "NotificationPopups",
 		gdkmonitor = gdkmonitor,
 		anchor = Anchor.TOP + Anchor.RIGHT,
-		Widget.Box({
-			vertical = true,
-			notifs(),
-		}),
-		on_destroy = function()
-			Managers.VariableManager.cleanup_all()
+		setup = function(self)
+			local notifs = NotificationMap(self)
+			self:add(Widget.Box({
+				vertical = true,
+				bind(notifs),
+			}))
 		end,
 	})
 end

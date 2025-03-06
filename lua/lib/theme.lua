@@ -2,18 +2,20 @@ local astal = require("astal")
 local Variable = require("astal.variable")
 local exec = astal.exec
 local Debug = require("lua.lib.debug")
-local Managers = require("lua.lib.managers")
 
 local Theme = {}
 
 function Theme:New()
 	local instance = {
-		is_dark = Variable(false),
+		is_dark = Variable(false):watch(
+			{ "bash", "-c", "dconf watch /org/gnome/desktop/interface/color-scheme" },
+			function(out)
+				return out:match("prefer%-dark") and true or false
+			end
+		),
 	}
 	setmetatable(instance, self)
 	self.__index = self
-
-	Managers.VariableManager.register(instance.is_dark)
 
 	local current_theme = self:get_current_theme_mode()
 	if not current_theme then
@@ -55,7 +57,7 @@ end
 
 function Theme:cleanup()
 	if self.is_dark then
-		Managers.VariableManager.cleanup(self.is_dark)
+		self.is_dark:drop()
 	end
 end
 

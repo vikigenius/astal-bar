@@ -5,18 +5,9 @@ local Variable = astal.Variable
 local GLib = astal.require("GLib")
 local Network = astal.require("AstalNetwork")
 local Debug = require("lua.lib.debug")
-local Managers = require("lua.lib.managers")
 
-local show_networks = Variable(false)
 local network = Network.get_default()
 local wifi = network.wifi
-local is_enabled = Variable(wifi and wifi.enabled or false)
-local airplane_mode = Variable(false)
-
-Managers.VariableManager.register(show_networks)
-Managers.VariableManager.register(wifi)
-Managers.VariableManager.register(is_enabled)
-Managers.VariableManager.register(airplane_mode)
 
 if not network or not wifi then
 	Debug.error(
@@ -54,10 +45,7 @@ local function connect_to_access_point(access_point)
 	astal.exec_async(string.format("nmcli device wifi connect %s", access_point.bssid))
 end
 
-local function AirplaneMode()
-	local airplane_binding = bind(airplane_mode)
-	Managers.BindingManager.register(airplane_binding)
-
+local function AirplaneMode(airplane_mode)
 	return Widget.Box({
 		class_name = "airplane-mode",
 		orientation = "HORIZONTAL",
@@ -68,11 +56,10 @@ local function AirplaneMode()
 			hexpand = true,
 		}),
 		Widget.Switch({
-			active = airplane_binding,
+			active = airplane_mode(),
 			on_state_set = function(_, state)
 				if state then
 					wifi.enabled = false
-					is_enabled:set(false)
 				end
 				airplane_mode:set(state)
 				return true
@@ -81,9 +68,10 @@ local function AirplaneMode()
 	})
 end
 
-local function WifiToggle()
-	local enabled_binding = bind(wifi, "enabled")
-	Managers.BindingManager.register(enabled_binding)
+local function WifiToggle(is_enabled)
+	local wifi_enabled = Variable.derive({ bind(wifi, "enabled") }, function(enabled)
+		return enabled
+	end)
 
 	return Widget.Box({
 		class_name = "wifi-toggle",
@@ -95,7 +83,7 @@ local function WifiToggle()
 			hexpand = true,
 		}),
 		Widget.Switch({
-			active = enabled_binding,
+			active = wifi_enabled(),
 			on_state_set = function(_, state)
 				wifi.enabled = state
 				is_enabled:set(state)
@@ -106,17 +94,33 @@ local function WifiToggle()
 end
 
 local function CurrentNetwork()
-	local icon_binding = bind(wifi, "icon-name")
-	local ssid_binding = bind(wifi, "ssid")
-	local strength_binding = bind(wifi, "strength")
-	local freq_binding = bind(wifi, "frequency")
-	local bandwidth_binding = bind(wifi, "bandwidth")
+	local wifi_ssid = Variable.derive({ bind(wifi, "ssid") }, function(ssid)
+		return ssid or "Not Connected"
+	end)
 
-	Managers.BindingManager.register(icon_binding)
-	Managers.BindingManager.register(ssid_binding)
-	Managers.BindingManager.register(strength_binding)
-	Managers.BindingManager.register(freq_binding)
-	Managers.BindingManager.register(bandwidth_binding)
+	local wifi_strength = Variable.derive({ bind(wifi, "strength") }, function(strength)
+		if not strength then
+			return "N/A"
+		end
+		if strength >= 80 then
+			return "Excellent"
+		end
+		if strength >= 60 then
+			return "Good"
+		end
+		if strength >= 40 then
+			return "Fair"
+		end
+		return "Weak"
+	end)
+
+	local wifi_frequency = Variable.derive({ bind(wifi, "frequency") }, function(freq)
+		return freq and string.format("%.1f GHz", freq / 1000) or "N/A"
+	end)
+
+	local wifi_bandwidth = Variable.derive({ bind(wifi, "bandwidth") }, function(bw)
+		return bw and string.format("%d Mbps", bw) or "N/A"
+	end)
 
 	return Widget.Box({
 		class_name = "current-network",
@@ -126,12 +130,10 @@ local function CurrentNetwork()
 			orientation = "HORIZONTAL",
 			spacing = 10,
 			Widget.Icon({
-				icon = icon_binding,
+				icon = bind(wifi, "icon-name"),
 			}),
 			Widget.Label({
-				label = ssid_binding:as(function(ssid)
-					return ssid or "Not Connected"
-				end),
+				label = wifi_ssid(),
 				xalign = 0,
 			}),
 		}),
@@ -143,21 +145,7 @@ local function CurrentNetwork()
 				orientation = "HORIZONTAL",
 				Widget.Label({ label = "Signal Strength:" }),
 				Widget.Label({
-					label = strength_binding:as(function(strength)
-						local quality
-						if not strength then
-							quality = "N/A"
-						elseif strength >= 80 then
-							quality = "Excellent"
-						elseif strength >= 60 then
-							quality = "Good"
-						elseif strength >= 40 then
-							quality = "Fair"
-						else
-							quality = "Weak"
-						end
-						return quality
-					end),
+					label = wifi_strength(),
 					xalign = 1,
 					hexpand = true,
 				}),
@@ -166,10 +154,7 @@ local function CurrentNetwork()
 				orientation = "HORIZONTAL",
 				Widget.Label({ label = "Frequency:" }),
 				Widget.Label({
-					label = freq_binding:as(function(freq)
-						local formatted = freq and string.format("%.1f GHz", freq / 1000) or "N/A"
-						return formatted
-					end),
+					label = wifi_frequency(),
 					xalign = 1,
 					hexpand = true,
 				}),
@@ -178,10 +163,7 @@ local function CurrentNetwork()
 				orientation = "HORIZONTAL",
 				Widget.Label({ label = "Bandwidth:" }),
 				Widget.Label({
-					label = bandwidth_binding:as(function(bw)
-						local formatted = bw and string.format("%d Mbps", bw) or "N/A"
-						return formatted
-					end),
+					label = wifi_bandwidth(),
 					xalign = 1,
 					hexpand = true,
 				}),
@@ -190,28 +172,18 @@ local function CurrentNetwork()
 	})
 end
 
-local function VisibleNetworks()
+local function VisibleNetworks(parent)
 	local is_scanning = Variable(false)
 	local networks_ready = Variable(false)
-	local cached_networks = nil
-
-	Managers.VariableManager.register(is_scanning)
-	Managers.VariableManager.register(networks_ready)
-
-	local scanning_binding = bind(is_scanning)
-	local networks_ready_binding = bind(networks_ready)
-	local show_networks_binding = bind(show_networks)
-
-	Managers.BindingManager.register(scanning_binding)
-	Managers.BindingManager.register(networks_ready_binding)
-	Managers.BindingManager.register(show_networks_binding)
+	local show_networks = Variable(false)
+	local cached_networks = Variable({})
 
 	local function start_scan()
 		if wifi.enabled then
 			Debug.debug("Network", "Starting network scan")
 			is_scanning:set(true)
 			networks_ready:set(false)
-			cached_networks = nil
+			cached_networks:set({})
 
 			local scan_result = wifi:scan()
 			if not scan_result then
@@ -225,19 +197,28 @@ local function VisibleNetworks()
 			end
 
 			GLib.timeout_add(GLib.PRIORITY_DEFAULT, 2000, function()
-				cached_networks = wifi.access_points
-				if not cached_networks then
+				cached_networks:set(wifi.access_points or {})
+				if not cached_networks:get() then
 					Debug.error("Network", "Failed to get access points after scan")
 				end
 				is_scanning:set(false)
 				networks_ready:set(true)
-				return false
+				return GLib.SOURCE_REMOVE
 			end)
 		end
 	end
 
-	local function render_networks()
-		if not networks_ready:get() then
+	local networks_list = Variable.derive({ networks_ready, cached_networks }, function(ready, networks)
+		if not wifi.enabled then
+			return {
+				Widget.Label({
+					label = "Wi-Fi is disabled",
+					xalign = 0.5,
+				}),
+			}
+		end
+
+		if not ready then
 			return {
 				Widget.Label({
 					label = "Scanning for networks...",
@@ -247,8 +228,8 @@ local function VisibleNetworks()
 		end
 
 		local list = {}
-		if cached_networks then
-			for _, ap in ipairs(cached_networks) do
+		if networks then
+			for _, ap in ipairs(networks) do
 				if ap and ap.ssid and ap.ssid ~= "" then
 					table.insert(list, ap)
 				end
@@ -297,7 +278,7 @@ local function VisibleNetworks()
 			)
 		end
 		return buttons
-	end
+	end)
 
 	return Widget.Box({
 		class_name = "visible-networks",
@@ -312,7 +293,7 @@ local function VisibleNetworks()
 				else
 					is_scanning:set(false)
 					networks_ready:set(false)
-					cached_networks = nil
+					cached_networks:set({})
 				end
 			end,
 			child = Widget.Box({
@@ -322,17 +303,17 @@ local function VisibleNetworks()
 				Widget.Box({
 					hexpand = true,
 					Widget.Label({
-						label = scanning_binding:as(function(scanning)
+						label = Variable.derive({ is_scanning }, function(scanning)
 							return scanning and "Scanning..." or "Available Networks"
-						end),
+						end)(),
 						xalign = 0,
 					}),
 				}),
 				Widget.Icon({
 					icon = "pan-down-symbolic",
-					class_name = show_networks_binding:as(function(shown)
+					class_name = Variable.derive({ show_networks }, function(shown)
 						return shown and "expanded" or ""
-					end),
+					end)(),
 				}),
 			}),
 		}),
@@ -347,17 +328,7 @@ local function VisibleNetworks()
 				child = Widget.Box({
 					orientation = "VERTICAL",
 					spacing = 5,
-					networks_ready_binding:as(function()
-						if not wifi.enabled then
-							return {
-								Widget.Label({
-									label = "Wi-Fi is disabled",
-									xalign = 0.5,
-								}),
-							}
-						end
-						return render_networks()
-					end),
+					networks_list(),
 				}),
 			}),
 		}),
@@ -403,19 +374,20 @@ function NetworkWindow.new(gdkmonitor)
 		class_name = "NetworkWindow",
 		gdkmonitor = gdkmonitor,
 		anchor = Anchor.TOP + Anchor.RIGHT,
-		child = Widget.Box({
-			orientation = "VERTICAL",
-			spacing = 15,
-			css = "padding: 15px;",
-			AirplaneMode(),
-			WifiToggle(),
-			CurrentNetwork(),
-			VisibleNetworks(),
-			Settings(close_window),
-		}),
-		on_destroy = function()
-			Managers.BindingManager.cleanup_all()
-			Managers.VariableManager.cleanup_all()
+		setup = function(self)
+			local airplane_mode = Variable(false)
+			local is_enabled = Variable(wifi and wifi.enabled or false)
+
+			self:add(Widget.Box({
+				orientation = "VERTICAL",
+				spacing = 15,
+				css = "padding: 15px;",
+				AirplaneMode(airplane_mode),
+				WifiToggle(is_enabled),
+				CurrentNetwork(),
+				VisibleNetworks(self),
+				Settings(close_window),
+			}))
 		end,
 	})
 

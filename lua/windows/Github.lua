@@ -5,7 +5,6 @@ local Variable = astal.Variable
 local GLib = astal.require("GLib")
 local map = require("lua.lib.common").map
 local Github = require("lua.lib.github")
-local Managers = require("lua.lib.managers")
 
 local function format_event_type(type)
 	return type:gsub("Event", ""):lower()
@@ -101,55 +100,70 @@ local function EventItem(props, close_window)
 end
 
 local function GithubFeed(close_window)
-	local events = Variable({}):poll(Github.POLL_INTERVAL, function()
-		local github_events = Github.get_events()
-		if not github_events then
-			return { error = true }
-		end
-
-		if #github_events == 0 then
-			return { empty = true }
-		end
-
-		return map(github_events, function(event)
-			return {
-				type = format_event_type(event.type),
-				actor = event.actor.login,
-				repo = format_repo_name(event.repo),
-				time = Github.format_time(event.created_at),
-				avatar_url = event.actor.avatar_url,
-				url = string.format("https://github.com/%s", event.repo.name),
-			}
-		end)
-	end)
-
-	Managers.VariableManager.register(events)
-	local events_binding = bind(events)
-	Managers.BindingManager.register(events_binding)
-
 	return Widget.Scrollable({
 		vscrollbar_policy = "AUTOMATIC",
 		hscrollbar_policy = "NEVER",
 		class_name = "github-feed",
-		child = Widget.Box({
-			orientation = "VERTICAL",
-			spacing = 8,
-			events_binding:as(function(evt)
-				if evt.error then
-					return ErrorIndicator()
+		setup = function(self)
+			local events_var = Variable.new({})
+
+			local function fetch_events()
+				local github_events = Github.get_events()
+				if not github_events then
+					events_var:set({ error = true })
+					return
 				end
-				if evt.empty or #evt == 0 then
-					return LoadingIndicator()
+
+				if #github_events == 0 then
+					events_var:set({ empty = true })
+					return
 				end
-				return Widget.Box({
-					orientation = "VERTICAL",
-					spacing = 8,
-					map(evt, function(event)
-						return EventItem(event, close_window)
-					end),
-				})
-			end),
-		}),
+
+				local formatted_events = map(github_events, function(event)
+					return {
+						type = format_event_type(event.type),
+						actor = event.actor.login,
+						repo = format_repo_name(event.repo),
+						time = Github.format_time(event.created_at),
+						avatar_url = event.actor.avatar_url,
+						url = string.format("https://github.com/%s", event.repo.name),
+					}
+				end)
+
+				events_var:set(formatted_events)
+			end
+
+			fetch_events()
+			local timer = GLib.timeout_add(GLib.PRIORITY_DEFAULT, Github.POLL_INTERVAL, function()
+				fetch_events()
+				return true
+			end)
+
+			self.child = Widget.Box({
+				orientation = "VERTICAL",
+				spacing = 8,
+				bind(events_var):as(function(evt)
+					if evt.error then
+						return ErrorIndicator()
+					end
+					if evt.empty or #evt == 0 then
+						return LoadingIndicator()
+					end
+					return Widget.Box({
+						orientation = "VERTICAL",
+						spacing = 8,
+						map(evt, function(event)
+							return EventItem(event, close_window)
+						end),
+					})
+				end),
+			})
+
+			self:hook(self, "destroy", function()
+				GLib.source_remove(timer)
+				events_var:drop()
+			end)
+		end,
 	})
 end
 
@@ -189,10 +203,6 @@ function GithubWindow.new(gdkmonitor)
 			}),
 			GithubFeed(close_window),
 		}),
-		on_destroy = function()
-			Managers.BindingManager.cleanup_all()
-			Managers.VariableManager.cleanup_all()
-		end,
 	})
 
 	return window

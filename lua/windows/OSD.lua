@@ -4,25 +4,23 @@ local Wp = astal.require("AstalWp")
 local bind = astal.bind
 local Debug = require("lua.lib.debug")
 local timeout = astal.timeout
-local Managers = require("lua.lib.managers")
+local Variable = require("astal.variable")
 
 local SHOW_TIMEOUT = 1500
 
 local function create_volume_indicator(device, class_name)
-	local volume_icon_binding = bind(device, "volume-icon")
-	local volume_binding = bind(device, "volume")
-
-	Managers.BindingManager.register(volume_icon_binding)
-	Managers.BindingManager.register(volume_binding)
-
 	return Widget.Box({
 		class_name = class_name,
 		visible = false,
+		css = "min-width: 200px; min-height: 30px;",
 		Widget.Box({
 			class_name = "indicator",
-			Widget.Icon({ icon = volume_icon_binding }),
+			css = "min-width: 80px;",
+			Widget.Icon({
+				icon = bind(device, "volume-icon"),
+			}),
 			Widget.Label({
-				label = volume_binding:as(function(vol)
+				label = bind(device, "volume"):as(function(vol)
 					return string.format("%d%%", math.floor((vol or 0) * 100))
 				end),
 			}),
@@ -33,27 +31,26 @@ local function create_volume_indicator(device, class_name)
 			Widget.Slider({
 				class_name = "volume-slider",
 				hexpand = true,
+				value = bind(device, "volume"),
 				on_dragged = function(slider)
 					device.volume = slider.value
 				end,
-				value = volume_binding,
 			}),
 		}),
 	})
 end
 
 local function create_mute_indicator(device, class_name)
-	local volume_icon_binding = bind(device, "volume-icon")
-	Managers.BindingManager.register(volume_icon_binding)
-
 	return Widget.Box({
 		class_name = class_name .. "-mute",
 		visible = false,
+		css = "min-width: 200px; min-height: 30px;",
 		Widget.Icon({
-			icon = volume_icon_binding,
+			icon = bind(device, "volume-icon"),
 		}),
 		Widget.Label({
 			label = "Muted",
+			css = "margin-left: 8px;",
 		}),
 	})
 end
@@ -61,9 +58,6 @@ end
 local function create_osd_widget(current_timeout_ref)
 	local speaker = Wp.get_default().audio.default_speaker
 	local mic = Wp.get_default().audio.default_microphone
-
-	Managers.VariableManager.register(speaker)
-	Managers.VariableManager.register(mic)
 
 	if not speaker or not mic then
 		Debug.error(
@@ -77,15 +71,16 @@ local function create_osd_widget(current_timeout_ref)
 	return Widget.Box({
 		class_name = "OSD",
 		vertical = true,
-		create_volume_indicator(speaker, "volume-indicator"),
-		create_mute_indicator(speaker, "volume-indicator"),
-		create_volume_indicator(mic, "mic-indicator"),
-		create_mute_indicator(mic, "mic-indicator"),
 		setup = function(self)
-			local speaker_vol = self.children[1]
-			local speaker_mute = self.children[2]
-			local mic_vol = self.children[3]
-			local mic_mute = self.children[4]
+			local speaker_vol = create_volume_indicator(speaker, "volume-indicator")
+			local speaker_mute = create_mute_indicator(speaker, "volume-indicator")
+			local mic_vol = create_volume_indicator(mic, "mic-indicator")
+			local mic_mute = create_mute_indicator(mic, "mic-indicator")
+
+			self:add(speaker_vol)
+			self:add(speaker_mute)
+			self:add(mic_vol)
+			self:add(mic_mute)
 
 			local function hide_all()
 				speaker_vol.visible = false
@@ -112,30 +107,43 @@ local function create_osd_widget(current_timeout_ref)
 				end)
 			end
 
-			local volume_binding = bind(speaker, "volume")
-			local mute_binding = bind(speaker, "mute")
-			local mic_volume_binding = bind(mic, "volume")
-			local mic_mute_binding = bind(mic, "mute")
+			local speaker_volume_var = Variable.derive({ bind(speaker, "volume") }, function(vol)
+				return vol
+			end)
 
-			Managers.BindingManager.register(volume_binding)
-			Managers.BindingManager.register(mute_binding)
-			Managers.BindingManager.register(mic_volume_binding)
-			Managers.BindingManager.register(mic_mute_binding)
+			local speaker_mute_var = Variable.derive({ bind(speaker, "mute") }, function(muted)
+				return muted
+			end)
 
-			volume_binding:subscribe(function(vol)
+			local mic_volume_var = Variable.derive({ bind(mic, "volume") }, function(vol)
+				return vol
+			end)
+
+			local mic_mute_var = Variable.derive({ bind(mic, "mute") }, function(muted)
+				return muted
+			end)
+
+			speaker_volume_var:subscribe(function()
 				show_osd(speaker_vol)
 			end)
 
-			mute_binding:subscribe(function(muted)
+			speaker_mute_var:subscribe(function(muted)
 				show_osd(muted and speaker_mute or speaker_vol)
 			end)
 
-			mic_volume_binding:subscribe(function(vol)
+			mic_volume_var:subscribe(function()
 				show_osd(mic_vol)
 			end)
 
-			mic_mute_binding:subscribe(function(muted)
+			mic_mute_var:subscribe(function(muted)
 				show_osd(muted and mic_mute or mic_vol)
+			end)
+
+			self:hook(self, "destroy", function()
+				speaker_volume_var:drop()
+				speaker_mute_var:drop()
+				mic_volume_var:drop()
+				mic_mute_var:drop()
 			end)
 		end,
 	})
@@ -154,13 +162,13 @@ return function(gdkmonitor)
 		class_name = "OSDWindow",
 		gdkmonitor = gdkmonitor,
 		anchor = Anchor.BOTTOM,
-		create_osd_widget(current_timeout_ref),
+		setup = function(self)
+			self:add(create_osd_widget(current_timeout_ref))
+		end,
 		on_destroy = function()
 			if current_timeout_ref.timer then
 				current_timeout_ref.timer = nil
 			end
-			Managers.BindingManager.cleanup_all()
-			Managers.VariableManager.cleanup_all()
 		end,
 	})
 end

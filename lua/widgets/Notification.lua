@@ -5,7 +5,8 @@ local map = require("lua.lib.common").map
 local time = require("lua.lib.common").time
 local file_exists = require("lua.lib.common").file_exists
 local Debug = require("lua.lib.debug")
-local Managers = require("lua.lib.managers")
+local Variable = require("astal.variable")
+local bind = require("astal").bind
 
 local function is_icon(icon)
 	if not icon then
@@ -17,7 +18,6 @@ local function is_icon(icon)
 	return Astal.Icon.lookup_icon(icon) ~= nil
 end
 
----@param props { setup?: function, on_hover_lost?: function, notification: any }
 return function(props)
 	if not props.notification then
 		Debug.error("Notification", "No notification data provided")
@@ -25,7 +25,6 @@ return function(props)
 	end
 
 	local n = props.notification
-	Managers.VariableManager.register(n)
 
 	local image_path = nil
 	local app_icon = n:get_app_icon()
@@ -113,7 +112,6 @@ return function(props)
 			class_name = "actions",
 			map(n:get_actions(), function(action)
 				local label, id = action.label, action.id
-
 				return Widget.Button({
 					hexpand = true,
 					on_clicked = function()
@@ -144,9 +142,5 @@ return function(props)
 			content,
 			actions_box,
 		}),
-		on_destroy = function()
-			Managers.VariableManager.cleanup_all()
-			Managers.BindingManager.cleanup_all()
-		end,
 	})
 end

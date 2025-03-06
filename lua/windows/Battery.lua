@@ -6,7 +6,6 @@ local Battery = astal.require("AstalBattery")
 local PowerProfiles = astal.require("AstalPowerProfiles")
 local GLib = astal.require("GLib")
 local Debug = require("lua.lib.debug")
-local Managers = require("lua.lib.managers")
 
 local CONSERVATION_MODE_PATH = "/sys/devices/pci0000:00/0000:00:14.3/PNP0C09:00/VPC2004:00/conservation_mode"
 
@@ -26,8 +25,6 @@ local function getBatteryDevice()
 		return nil
 	end
 
-	Managers.VariableManager.register(upower)
-
 	local devices = upower:get_devices()
 	if not devices then
 		Debug.error("Battery", "Failed to get battery devices")
@@ -36,7 +33,6 @@ local function getBatteryDevice()
 
 	for _, device in ipairs(devices) do
 		if device:get_is_battery() and device:get_power_supply() then
-			Managers.VariableManager.register(device)
 			return device
 		end
 	end
@@ -46,7 +42,6 @@ local function getBatteryDevice()
 		Debug.error("Battery", "No battery device found")
 		return nil
 	end
-	Managers.VariableManager.register(display_device)
 	return display_device
 end
 
@@ -72,8 +67,7 @@ local function MainInfo(on_destroy_ref)
 		return Widget.Box({})
 	end
 
-	local time_info = Variable(""):poll(1000, function()
-		local state = bat:get_state()
+	local time_info = Variable.derive({ bind(bat, "state") }, function(state)
 		if not state then
 			Debug.error("Battery", "Failed to get battery state")
 			return "Unknown"
@@ -97,16 +91,7 @@ local function MainInfo(on_destroy_ref)
 		return tostring(state)
 	end)
 
-	Managers.VariableManager.register(time_info)
 	on_destroy_ref.time_info = time_info
-
-	local battery_icon_binding = bind(bat, "battery-icon-name")
-	local percentage_binding = bind(bat, "percentage")
-	local time_info_binding = bind(time_info)
-
-	Managers.BindingManager.register(battery_icon_binding)
-	Managers.BindingManager.register(percentage_binding)
-	Managers.BindingManager.register(time_info_binding)
 
 	return Widget.Box({
 		class_name = "battery-main-info",
@@ -114,12 +99,12 @@ local function MainInfo(on_destroy_ref)
 			orientation = "HORIZONTAL",
 			spacing = 10,
 			Widget.Icon({
-				icon = battery_icon_binding,
+				icon = bind(bat, "battery-icon-name"),
 			}),
 			Widget.Box({
 				orientation = "VERTICAL",
 				Widget.Label({
-					label = percentage_binding:as(function(p)
+					label = bind(bat, "percentage"):as(function(p)
 						if not p then
 							Debug.error("Battery", "Failed to get battery percentage")
 							return "Battery N/A"
@@ -129,7 +114,7 @@ local function MainInfo(on_destroy_ref)
 					xalign = 0,
 				}),
 				Widget.Label({
-					label = time_info_binding,
+					label = bind(time_info),
 					xalign = 0,
 				}),
 			}),
@@ -144,18 +129,6 @@ local function BatteryInfo()
 		return Widget.Box({})
 	end
 
-	local state_binding = bind(bat, "state")
-	local capacity_binding = bind(bat, "capacity")
-	local cycles_binding = bind(bat, "charge-cycles")
-	local rate_binding = bind(bat, "energy-rate")
-	local voltage_binding = bind(bat, "voltage")
-
-	Managers.BindingManager.register(state_binding)
-	Managers.BindingManager.register(capacity_binding)
-	Managers.BindingManager.register(cycles_binding)
-	Managers.BindingManager.register(rate_binding)
-	Managers.BindingManager.register(voltage_binding)
-
 	return Widget.Box({
 		class_name = "battery-details",
 		orientation = "VERTICAL",
@@ -164,7 +137,7 @@ local function BatteryInfo()
 			orientation = "HORIZONTAL",
 			Widget.Label({ label = "Status:" }),
 			Widget.Label({
-				label = state_binding:as(function(state)
+				label = bind(bat, "state"):as(function(state)
 					if not state then
 						Debug.error("Battery", "Failed to get battery state")
 						return "Unknown"
@@ -179,7 +152,7 @@ local function BatteryInfo()
 			orientation = "HORIZONTAL",
 			Widget.Label({ label = "Health:" }),
 			Widget.Label({
-				label = capacity_binding:as(function(capacity)
+				label = bind(bat, "capacity"):as(function(capacity)
 					if not capacity then
 						Debug.error("Battery", "Failed to get battery capacity")
 						return "N/A"
@@ -194,7 +167,7 @@ local function BatteryInfo()
 			orientation = "HORIZONTAL",
 			Widget.Label({ label = "Charge cycles:" }),
 			Widget.Label({
-				label = cycles_binding:as(function(cycles)
+				label = bind(bat, "charge-cycles"):as(function(cycles)
 					return tostring(cycles or "N/A")
 				end),
 				xalign = 1,
@@ -205,7 +178,7 @@ local function BatteryInfo()
 			orientation = "HORIZONTAL",
 			Widget.Label({ label = "Power draw:" }),
 			Widget.Label({
-				label = rate_binding:as(function(rate)
+				label = bind(bat, "energy-rate"):as(function(rate)
 					if not rate then
 						Debug.error("Battery", "Failed to get power draw rate")
 						return "N/A"
@@ -220,7 +193,7 @@ local function BatteryInfo()
 			orientation = "HORIZONTAL",
 			Widget.Label({ label = "Voltage:" }),
 			Widget.Label({
-				label = voltage_binding:as(function(voltage)
+				label = bind(bat, "voltage"):as(function(voltage)
 					if not voltage then
 						Debug.error("Battery", "Failed to get battery voltage")
 						return "N/A"
@@ -240,8 +213,6 @@ local function PowerProfile(on_destroy_ref)
 		Debug.error("Battery", "Failed to initialize PowerProfiles")
 		return Widget.Box({})
 	end
-
-	Managers.VariableManager.register(power)
 
 	local function updateButtons(box, active_profile)
 		if not box or not active_profile then
@@ -296,26 +267,27 @@ local function PowerProfile(on_destroy_ref)
 		end,
 	})
 
-	local profile_binding = bind(power, "active-profile"):subscribe(function(profile)
+	local profile_var = Variable.derive({ bind(power, "active-profile") }, function(profile)
 		updateButtons(buttons_box, profile)
+		return profile
 	end)
-	Managers.BindingManager.register(profile_binding)
-	on_destroy_ref.profile_binding = profile_binding
+
+	on_destroy_ref.profile_var = profile_var
 
 	local bat = getBatteryDevice()
-	local profile_monitor = Variable(""):poll(1000, function()
+	local auto_profile = Variable.derive({ bind(bat, "state") }, function(state)
 		if not bat or not power then
 			return
 		end
-		local state = bat:get_state()
 		if state == "CHARGING" then
 			power.active_profile = "performance"
 		elseif state == "DISCHARGING" then
 			power.active_profile = "balanced"
 		end
+		return state
 	end)
-	Managers.VariableManager.register(profile_monitor)
-	on_destroy_ref.profile_monitor = profile_monitor
+
+	on_destroy_ref.auto_profile = auto_profile
 
 	return Widget.Box({
 		class_name = "power-profiles",
@@ -330,8 +302,11 @@ local function PowerProfile(on_destroy_ref)
 end
 
 local function ConservationMode()
+	local conservation_var = Variable(getConservationMode())
+
 	local function updateSwitchState(switch)
 		local is_active = getConservationMode()
+		conservation_var:set(is_active)
 		switch:set_active(is_active)
 		if is_active then
 			switch:get_style_context():add_class("active")
@@ -341,7 +316,7 @@ local function ConservationMode()
 	end
 
 	local switch = Widget.Switch({
-		active = getConservationMode(),
+		active = conservation_var:get(),
 		on_state_set = function(self, state)
 			local value = state and "1" or "0"
 			astal.write_file_async(CONSERVATION_MODE_PATH, value, function(err)
@@ -434,16 +409,14 @@ function BatteryWindow.new(gdkmonitor)
 		}),
 		on_destroy = function()
 			if on_destroy_ref.time_info then
-				Managers.VariableManager.cleanup(on_destroy_ref.time_info)
+				on_destroy_ref.time_info:drop()
 			end
-			if on_destroy_ref.profile_binding then
-				Managers.BindingManager.cleanup(on_destroy_ref.profile_binding)
+			if on_destroy_ref.profile_var then
+				on_destroy_ref.profile_var:drop()
 			end
-			if on_destroy_ref.profile_monitor then
-				Managers.VariableManager.cleanup(on_destroy_ref.profile_monitor)
+			if on_destroy_ref.auto_profile then
+				on_destroy_ref.auto_profile:drop()
 			end
-			Managers.BindingManager.cleanup_all()
-			Managers.VariableManager.cleanup_all()
 		end,
 	})
 

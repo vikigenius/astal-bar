@@ -4,12 +4,22 @@ local bind = astal.bind
 local Variable = astal.Variable
 local GLib = astal.require("GLib")
 local Network = astal.require("AstalNetwork")
+local Debug = require("lua.lib.debug")
 
 local show_networks = Variable(false)
 local network = Network.get_default()
 local wifi = network.wifi
 local is_enabled = Variable(wifi and wifi.enabled or false)
 local airplane_mode = Variable(false)
+
+if not network or not wifi then
+	Debug.error(
+		"Network",
+		"Failed to initialize network services - Network: %s, WiFi: %s",
+		network and "OK" or "NULL",
+		wifi and "OK" or "NULL"
+	)
+end
 
 local function remove_duplicates(list)
 	local seen = {}
@@ -31,8 +41,10 @@ end
 
 local function connect_to_access_point(access_point)
 	if not access_point or not access_point.ssid then
+		Debug.error("Network", "Invalid access point data for connection")
 		return
 	end
+	Debug.info("Network", "Attempting to connect to %s (%s)", access_point.ssid, access_point.bssid)
 	astal.exec_async(string.format("nmcli device wifi connect %s", access_point.bssid))
 end
 
@@ -108,18 +120,19 @@ local function CurrentNetwork()
 				Widget.Label({ label = "Signal Strength:" }),
 				Widget.Label({
 					label = bind(wifi, "strength"):as(function(strength)
+						local quality
 						if not strength then
-							return "N/A"
-						end
-						if strength >= 80 then
-							return "Excellent"
+							quality = "N/A"
+						elseif strength >= 80 then
+							quality = "Excellent"
 						elseif strength >= 60 then
-							return "Good"
+							quality = "Good"
 						elseif strength >= 40 then
-							return "Fair"
+							quality = "Fair"
 						else
-							return "Weak"
+							quality = "Weak"
 						end
+						return quality
 					end),
 					xalign = 1,
 					hexpand = true,
@@ -130,7 +143,8 @@ local function CurrentNetwork()
 				Widget.Label({ label = "Frequency:" }),
 				Widget.Label({
 					label = bind(wifi, "frequency"):as(function(freq)
-						return freq and string.format("%.1f GHz", freq / 1000) or "N/A"
+						local formatted = freq and string.format("%.1f GHz", freq / 1000) or "N/A"
+						return formatted
 					end),
 					xalign = 1,
 					hexpand = true,
@@ -141,7 +155,8 @@ local function CurrentNetwork()
 				Widget.Label({ label = "Bandwidth:" }),
 				Widget.Label({
 					label = bind(wifi, "bandwidth"):as(function(bw)
-						return bw and string.format("%d Mbps", bw) or "N/A"
+						local formatted = bw and string.format("%d Mbps", bw) or "N/A"
+						return formatted
 					end),
 					xalign = 1,
 					hexpand = true,
@@ -158,21 +173,33 @@ local function VisibleNetworks()
 
 	local function start_scan()
 		if wifi.enabled then
+			Debug.debug("Network", "Starting network scan")
 			is_scanning:set(true)
 			networks_ready:set(false)
 			cached_networks = nil
 
-			wifi:scan()
+			local scan_result = wifi:scan()
+			if not scan_result then
+				if not wifi or wifi.state == "ERROR" then
+					Debug.error(
+						"Network",
+						"Critical: Failed to initiate network scan - WiFi state: %s",
+						tostring(wifi and wifi.state or "unknown")
+					)
+				end
+			end
 
 			GLib.timeout_add(GLib.PRIORITY_DEFAULT, 2000, function()
 				cached_networks = wifi.access_points
+				if not cached_networks then
+					Debug.error("Network", "Failed to get access points after scan")
+				end
 				is_scanning:set(false)
 				networks_ready:set(true)
 				return false
 			end)
 		end
 	end
-
 	local function render_networks()
 		if not networks_ready:get() then
 			return {
@@ -196,6 +223,7 @@ local function VisibleNetworks()
 		sort_by_priority(list)
 
 		if #list == 0 then
+			Debug.debug("Network", "No networks found after scan")
 			return {
 				Widget.Label({
 					label = "No networks found",
@@ -318,6 +346,11 @@ end
 local NetworkWindow = {}
 
 function NetworkWindow.new(gdkmonitor)
+	if not gdkmonitor then
+		Debug.error("Network", "Failed to initialize: gdkmonitor is nil")
+		return nil
+	end
+
 	local Anchor = astal.require("Astal").WindowAnchor
 	local window
 	local is_closing = false

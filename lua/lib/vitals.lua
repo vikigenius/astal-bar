@@ -1,5 +1,6 @@
 local astal = require("astal")
 local Variable = require("astal.variable")
+local Debug = require("lua.lib.debug")
 
 local Vitals = {}
 
@@ -15,7 +16,25 @@ function Vitals:New()
 	return instance
 end
 
+local function file_exists(path)
+	local file = io.open(path, "r")
+	if file then
+		file:close()
+		return true
+	end
+	return false
+end
+
 function Vitals:start_monitoring()
+	if not file_exists("/proc/stat") then
+		Debug.error("Vitals", "Cannot monitor CPU: /proc/stat not accessible")
+		return
+	end
+	if not file_exists("/proc/meminfo") then
+		Debug.error("Vitals", "Cannot monitor RAM: /proc/meminfo not accessible")
+		return
+	end
+
 	self._cpu_timer = astal.interval(1000, function()
 		self:update_cpu_usage()
 	end)
@@ -37,11 +56,13 @@ end
 function Vitals:update_cpu_usage()
 	local content = astal.read_file("/proc/stat")
 	if not content then
+		Debug.error("Vitals", "Failed to read CPU stats")
 		return
 	end
 
 	local cpu_line = content:match("^cpu%s+(%d+%s+%d+%s+%d+%s+%d+%s+%d+%s+%d+%s+%d+%s+%d+%s+%d+%s+%d+)")
 	if not cpu_line then
+		Debug.error("Vitals", "Invalid CPU stats format")
 		return
 	end
 
@@ -64,6 +85,7 @@ end
 function Vitals:update_ram_usage()
 	local content = astal.read_file("/proc/meminfo")
 	if not content then
+		Debug.error("Vitals", "Failed to read memory stats")
 		return
 	end
 
@@ -71,6 +93,11 @@ function Vitals:update_ram_usage()
 	local free = content:match("MemFree:%s+(%d+)")
 	local buffers = content:match("Buffers:%s+(%d+)")
 	local cached = content:match("Cached:%s+(%d+)")
+
+	if not (total and free and buffers and cached) then
+		Debug.error("Vitals", "Invalid memory stats format")
+		return
+	end
 
 	total = tonumber(total)
 	free = tonumber(free)

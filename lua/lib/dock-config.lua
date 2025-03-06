@@ -1,15 +1,29 @@
 local astal = require("astal")
 local Apps = astal.require("AstalApps")
 local cjson = require("cjson")
+local Debug = require("lua.lib.debug")
 
 local M = {}
 local apps = Apps.Apps.new()
+if not apps then
+	Debug.error("DockConfig", "Failed to initialize Apps service")
+end
 
 M.pinned_apps = {}
 M.running_apps = {}
 
 local config_path = debug.getinfo(1).source:match("@?(.*/)") .. "../../user-variables.lua"
-local user_vars = loadfile(config_path)()
+local success, user_vars = pcall(loadfile, config_path)
+if not success or not user_vars then
+	Debug.error("DockConfig", "Failed to load config file: %s", config_path)
+	return M
+end
+
+user_vars = user_vars()
+if not user_vars then
+	Debug.error("DockConfig", "Failed to execute config file")
+	return M
+end
 
 astal.monitor_file(config_path, function(_, _)
 	local new_config = loadfile(config_path)()
@@ -20,6 +34,11 @@ end)
 
 local function find_desktop_entry(name)
 	local app_list = apps:get_list()
+	if not app_list then
+		Debug.error("DockConfig", "Failed to get application list")
+		return nil
+	end
+
 	for _, app in ipairs(app_list) do
 		if
 			app
@@ -35,6 +54,7 @@ end
 local function get_running_windows()
 	local out, err = astal.exec("niri msg --json windows")
 	if err then
+		Debug.error("DockConfig", "Failed to get window list: %s", err)
 		return {}
 	end
 
@@ -42,16 +62,22 @@ local function get_running_windows()
 		return cjson.decode(out)
 	end)
 
-	if success and windows then
-		return windows
+	if not success then
+		Debug.error("DockConfig", "Failed to parse window list")
+		return {}
 	end
-	return {}
+
+	return windows or {}
 end
 
 function M.update_running_apps()
 	local windows = get_running_windows()
 	local running = {}
 	local app_list = apps:get_list()
+	if not app_list then
+		Debug.error("DockConfig", "Failed to get application list for running apps")
+		return
+	end
 
 	for _, window in ipairs(windows) do
 		if window.app_id then
@@ -76,7 +102,13 @@ end
 
 function M.initialize_pinned_apps(pinned_apps)
 	M.pinned_apps = {}
-	for _, name in ipairs(pinned_apps or user_vars.dock.pinned_apps or {}) do
+	local apps_to_check = pinned_apps or user_vars.dock.pinned_apps
+	if not apps_to_check then
+		Debug.error("DockConfig", "No pinned apps configuration found")
+		return
+	end
+
+	for _, name in ipairs(apps_to_check) do
 		local desktop_entry = find_desktop_entry(name)
 		if desktop_entry then
 			table.insert(M.pinned_apps, desktop_entry)

@@ -5,6 +5,7 @@ local GLib = astal.require("GLib")
 local Gtk = astal.require("Gtk")
 local Wp = astal.require("AstalWp")
 local Variable = astal.Variable
+local Debug = require("lua.lib.debug")
 
 _G.AUDIO_CONTROL_UPDATING = false
 
@@ -13,9 +14,13 @@ local show_input_devices = Variable(false)
 
 local function create_volume_control(type)
 	local audio = Wp.get_default().audio
+	if not audio then
+		Debug.error("AudioControl", "Failed to get audio service")
+		return Widget.Box({})
+	end
+
 	local device = audio["default_" .. type]
 	local volume_scale
-
 	local volume = Variable(device and device.volume * 100 or 0)
 
 	volume_scale = Widget.Slider({
@@ -38,6 +43,7 @@ local function create_volume_control(type)
 		end,
 		on_value_changed = function(self)
 			if not device then
+				Debug.error("AudioControl", "No audio device available for volume control")
 				return
 			end
 
@@ -132,6 +138,10 @@ end
 
 local function AudioOutputs()
 	local audio = Wp.get_default().audio
+	if not audio then
+		Debug.error("AudioControl", "Failed to get audio service for outputs")
+		return Widget.Box({})
+	end
 
 	return Widget.Box({
 		class_name = "audio-outputs",
@@ -202,6 +212,10 @@ end
 
 local function MicrophoneInputs()
 	local audio = Wp.get_default().audio
+	if not audio then
+		Debug.error("AudioControl", "Failed to get audio service for inputs")
+		return Widget.Box({})
+	end
 
 	return Widget.Box({
 		class_name = "microphone-inputs",
@@ -288,6 +302,11 @@ end
 local AudioControlWindow = {}
 
 function AudioControlWindow.new(gdkmonitor)
+	if not gdkmonitor then
+		Debug.error("AudioControl", "No monitor available")
+		return nil
+	end
+
 	local Anchor = astal.require("Astal").WindowAnchor
 	local window
 	local is_closing = false

@@ -5,12 +5,14 @@ local Variable = astal.Variable
 local Battery = astal.require("AstalBattery")
 local PowerProfiles = astal.require("AstalPowerProfiles")
 local GLib = astal.require("GLib")
+local Debug = require("lua.lib.debug")
 
 local CONSERVATION_MODE_PATH = "/sys/devices/pci0000:00/0000:00:14.3/PNP0C09:00/VPC2004:00/conservation_mode"
 
 local function getConservationMode()
 	local content, err = astal.read_file(CONSERVATION_MODE_PATH)
 	if err then
+		Debug.error("Battery", "Failed to read conservation mode: %s", err)
 		return false
 	end
 	return tonumber(content) == 1
@@ -18,7 +20,16 @@ end
 
 local function getBatteryDevice()
 	local upower = Battery.UPower.new()
+	if not upower then
+		Debug.error("Battery", "Failed to initialize UPower")
+		return nil
+	end
+
 	local devices = upower:get_devices()
+	if not devices then
+		Debug.error("Battery", "Failed to get battery devices")
+		return nil
+	end
 
 	for _, device in ipairs(devices) do
 		if device:get_is_battery() and device:get_power_supply() then
@@ -26,7 +37,12 @@ local function getBatteryDevice()
 		end
 	end
 
-	return upower:get_display_device()
+	local display_device = upower:get_display_device()
+	if not display_device then
+		Debug.error("Battery", "No battery device found")
+		return nil
+	end
+	return display_device
 end
 
 local function formatTime(seconds)
@@ -46,29 +62,34 @@ end
 
 local function MainInfo(on_destroy_ref)
 	local bat = getBatteryDevice()
+	if not bat then
+		Debug.error("Battery", "Cannot create MainInfo: no battery device")
+		return Widget.Box({})
+	end
+
 	local time_info = Variable(""):poll(1000, function()
 		local state = bat:get_state()
+		if not state then
+			Debug.error("Battery", "Failed to get battery state")
+			return "Unknown"
+		end
+
 		if state == "PENDING_CHARGE" and getConservationMode() then
 			return "Conservation mode enabled, waiting to charge"
 		end
 
-		if state == "CHARGING" then
-			local time = bat:get_time_to_full()
-			if time and time > 0 then
+		if state == "CHARGING" or state == "DISCHARGING" then
+			local time = state == "CHARGING" and bat:get_time_to_full() or bat:get_time_to_empty()
+			if not time then
+				Debug.error("Battery", "Failed to get battery time estimation")
+				return "Calculating..."
+			end
+			if time > 0 then
 				return formatTime(time)
 			end
 			return "Calculating..."
-		elseif state == "DISCHARGING" then
-			local time = bat:get_time_to_empty()
-			if time and time > 0 then
-				return formatTime(time)
-			end
-			return "Calculating..."
-		elseif state == "FULLY_CHARGED" then
-			return "Fully charged"
-		else
-			return tostring(state)
 		end
+		return tostring(state)
 	end)
 
 	on_destroy_ref.time_info = time_info
@@ -85,6 +106,10 @@ local function MainInfo(on_destroy_ref)
 				orientation = "VERTICAL",
 				Widget.Label({
 					label = bind(bat, "percentage"):as(function(p)
+						if not p then
+							Debug.error("Battery", "Failed to get battery percentage")
+							return "Battery N/A"
+						end
 						return string.format("Battery %.0f%%", p * 100)
 					end),
 					xalign = 0,
@@ -100,6 +125,10 @@ end
 
 local function BatteryInfo()
 	local bat = getBatteryDevice()
+	if not bat then
+		Debug.error("Battery", "Cannot create BatteryInfo: no battery device")
+		return Widget.Box({})
+	end
 
 	return Widget.Box({
 		class_name = "battery-details",
@@ -110,6 +139,10 @@ local function BatteryInfo()
 			Widget.Label({ label = "Status:" }),
 			Widget.Label({
 				label = bind(bat, "state"):as(function(state)
+					if not state then
+						Debug.error("Battery", "Failed to get battery state")
+						return "Unknown"
+					end
 					return state:gsub("^%l", string.upper):gsub("-", " ")
 				end),
 				xalign = 1,
@@ -121,6 +154,10 @@ local function BatteryInfo()
 			Widget.Label({ label = "Health:" }),
 			Widget.Label({
 				label = bind(bat, "capacity"):as(function(capacity)
+					if not capacity then
+						Debug.error("Battery", "Failed to get battery capacity")
+						return "N/A"
+					end
 					return string.format("%.1f%%", capacity * 100)
 				end),
 				xalign = 1,
@@ -143,7 +180,11 @@ local function BatteryInfo()
 			Widget.Label({ label = "Power draw:" }),
 			Widget.Label({
 				label = bind(bat, "energy-rate"):as(function(rate)
-					return string.format("%.1f W", rate or 0)
+					if not rate then
+						Debug.error("Battery", "Failed to get power draw rate")
+						return "N/A"
+					end
+					return string.format("%.1f W", rate)
 				end),
 				xalign = 1,
 				hexpand = true,
@@ -154,7 +195,11 @@ local function BatteryInfo()
 			Widget.Label({ label = "Voltage:" }),
 			Widget.Label({
 				label = bind(bat, "voltage"):as(function(voltage)
-					return string.format("%.1f V", voltage or 0)
+					if not voltage then
+						Debug.error("Battery", "Failed to get battery voltage")
+						return "N/A"
+					end
+					return string.format("%.1f V", voltage)
 				end),
 				xalign = 1,
 				hexpand = true,
@@ -165,8 +210,16 @@ end
 
 local function PowerProfile(on_destroy_ref)
 	local power = PowerProfiles.get_default()
+	if not power then
+		Debug.error("Battery", "Failed to initialize PowerProfiles")
+		return Widget.Box({})
+	end
 
 	local function updateButtons(box, active_profile)
+		if not box or not active_profile then
+			Debug.error("Battery", "Invalid arguments for updateButtons")
+			return
+		end
 		for _, child in ipairs(box:get_children()) do
 			local button_profile = child:get_label():lower():gsub(" ", "-")
 			if button_profile == active_profile then
@@ -184,23 +237,34 @@ local function PowerProfile(on_destroy_ref)
 		Widget.Button({
 			label = "Power Saver",
 			on_clicked = function()
+				if not power then
+					return
+				end
 				power.active_profile = "power-saver"
 			end,
 		}),
 		Widget.Button({
 			label = "Balanced",
 			on_clicked = function()
+				if not power then
+					return
+				end
 				power.active_profile = "balanced"
 			end,
 		}),
 		Widget.Button({
 			label = "Performance",
 			on_clicked = function()
+				if not power then
+					return
+				end
 				power.active_profile = "performance"
 			end,
 		}),
 		setup = function(self)
-			updateButtons(self, power.active_profile)
+			if power and power.active_profile then
+				updateButtons(self, power.active_profile)
+			end
 		end,
 	})
 
@@ -211,6 +275,9 @@ local function PowerProfile(on_destroy_ref)
 
 	local bat = getBatteryDevice()
 	local profile_monitor = Variable(""):poll(1000, function()
+		if not bat or not power then
+			return
+		end
 		local state = bat:get_state()
 		if state == "CHARGING" then
 			power.active_profile = "performance"
@@ -249,7 +316,7 @@ local function ConservationMode()
 			local value = state and "1" or "0"
 			astal.write_file_async(CONSERVATION_MODE_PATH, value, function(err)
 				if err then
-					print("Error setting conservation mode:", err)
+					Debug.error("Battery", "Failed to set conservation mode: %s", err)
 					updateSwitchState(self)
 				else
 					if state then
@@ -303,6 +370,11 @@ end
 local BatteryWindow = {}
 
 function BatteryWindow.new(gdkmonitor)
+	if not gdkmonitor then
+		Debug.error("Battery", "Failed to initialize: gdkmonitor is nil")
+		return nil
+	end
+
 	local Anchor = astal.require("Astal").WindowAnchor
 	local window
 	local on_destroy_ref = {}

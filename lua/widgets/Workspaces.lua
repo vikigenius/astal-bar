@@ -4,6 +4,7 @@ local bind = astal.bind
 local Variable = astal.Variable
 local map = require("lua.lib.common").map
 local cjson = require("cjson")
+local Debug = require("lua.lib.debug")
 
 local cached_monitors = nil
 local function get_niri_monitors()
@@ -13,6 +14,7 @@ local function get_niri_monitors()
 
 	local out, err = astal.exec("niri msg --json outputs")
 	if err then
+		Debug.error("Workspaces", "Failed to get niri monitors: %s", err)
 		return {}
 	end
 
@@ -20,7 +22,8 @@ local function get_niri_monitors()
 		return cjson.decode(out)
 	end)
 
-	if not success or not monitors then
+	if not success then
+		Debug.error("Workspaces", "Failed to decode niri monitor data")
 		return {}
 	end
 
@@ -49,6 +52,7 @@ local previous_workspace_state = nil
 local function process_workspace_data()
 	local out, err = astal.exec("niri msg --json workspaces")
 	if err then
+		Debug.error("Workspaces", "Failed to get workspace data: %s", err)
 		return previous_workspace_state or {}
 	end
 
@@ -56,7 +60,8 @@ local function process_workspace_data()
 		return cjson.decode(out)
 	end)
 
-	if not success or not workspaces then
+	if not success then
+		Debug.error("Workspaces", "Failed to decode workspace data")
 		return previous_workspace_state or {}
 	end
 
@@ -113,7 +118,10 @@ local function WorkspaceButton(props)
 		on_clicked = function()
 			local cmd =
 				string.format("niri msg action switch-to-workspace-index %d %s", props.id - 1, props.monitor_name)
-			astal.exec(cmd)
+			local _, err = astal.exec(cmd)
+			if err then
+				Debug.error("Workspaces", "Failed to switch workspace: %s", err)
+			end
 		end,
 	})
 end

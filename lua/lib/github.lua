@@ -11,10 +11,12 @@ local POLL_INTERVAL = 300000
 local MAX_RETRIES = 3
 local RETRY_DELAY = 10
 local RATE_CHECK_INTERVAL = 900
+local RATE_LIMIT_COOLDOWN = 3600
 
 local last_rate_check = 0
 local last_rate_status = true
 local last_rate_remaining = 60
+local last_rate_error_time = 0
 
 local Github = {
 	get_events = nil,
@@ -104,35 +106,56 @@ end
 
 local function check_rate_limit()
 	local current_time = os.time()
+
+	if current_time - last_rate_error_time < RATE_LIMIT_COOLDOWN then
+		Debug.debug("GitHub", "In rate limit cooldown period, using cached status")
+		return false
+	end
+
 	if current_time - last_rate_check < RATE_CHECK_INTERVAL then
 		Debug.debug("GitHub", "Using cached rate limit status (remaining: %d)", last_rate_remaining)
 		return last_rate_status
 	end
 
 	Debug.debug("GitHub", "Performing fresh rate limit check")
-	local rate_limit_check = astal.exec({
+	local success, rate_limit_check = pcall(astal.exec, {
 		"curl",
-		"-sI",
+		"-s",
+		"--connect-timeout",
+		"3",
+		"--max-time",
+		"5",
 		"https://api.github.com/rate_limit",
 		"-H",
 		"Accept: application/vnd.github+json",
 	})
 
-	if rate_limit_check then
-		local remaining = tonumber(rate_limit_check:match("x%-ratelimit%-remaining: (%d+)"))
-		if remaining then
-			last_rate_remaining = remaining
-			Debug.debug("GitHub", "Rate limit remaining: %d", remaining)
-			if remaining < 10 then
-				last_rate_status = false
-				last_rate_check = current_time
-				return false
-			end
-		end
+	if not success or not rate_limit_check then
+		Debug.warn("GitHub", "Rate limit check failed, assuming limit reached")
+		last_rate_error_time = current_time
+		return false
+	end
+
+	local parse_success, rate_data = pcall(cjson.decode, rate_limit_check)
+	if not parse_success or not rate_data or not rate_data.resources or not rate_data.resources.core then
+		Debug.warn("GitHub", "Could not parse rate limit response, assuming limit reached")
+		last_rate_error_time = current_time
+		return false
+	end
+
+	local remaining = rate_data.resources.core.remaining
+	last_rate_remaining = remaining
+	last_rate_check = current_time
+	Debug.debug("GitHub", "Rate limit remaining: %d", remaining)
+
+	if remaining < 10 then
+		Debug.warn("GitHub", "Rate limit low, entering cooldown")
+		last_rate_error_time = current_time
+		last_rate_status = false
+		return false
 	end
 
 	last_rate_status = true
-	last_rate_check = current_time
 	return true
 end
 
@@ -157,9 +180,11 @@ local function fetch_github_events(username, attempt)
 		"curl",
 		"-s",
 		"-S",
-		"--compressed",
+		"--connect-timeout",
+		"3",
 		"--max-time",
 		"5",
+		"--compressed",
 		"-H",
 		"Accept: application/json",
 		"-H",
@@ -172,22 +197,28 @@ local function fetch_github_events(username, attempt)
 	}
 
 	Debug.debug("GitHub", "Executing curl request")
-	local output = astal.exec(curl_cmd)
-	if not output then
-		Debug.warn("GitHub", "Request failed")
+	local success, output = pcall(astal.exec, curl_cmd)
+
+	if not success then
+		Debug.warn("GitHub", "Request failed with error")
 		if attempt < MAX_RETRIES then
 			local delay = exponential_backoff(attempt)
 			Debug.debug("GitHub", "Retrying in %d seconds", delay)
-			astal.sleep(exponential_backoff(attempt))
+			astal.sleep(delay)
 			return fetch_github_events(username, attempt + 1)
 		end
 		return nil, "network_error"
 	end
 
+	if not output then
+		Debug.warn("GitHub", "Empty response received")
+		return nil, "empty_response"
+	end
+
 	Debug.debug("GitHub", "Parsing response")
-	local success, events = pcall(cjson.decode, output)
-	if not success or type(events) ~= "table" then
-		Debug.error("GitHub", "Failed to parse response: %s", success and "invalid format" or events)
+	local parse_success, events = pcall(cjson.decode, output)
+	if not parse_success or type(events) ~= "table" then
+		Debug.error("GitHub", "Failed to parse response: %s", parse_success and "invalid format" or events)
 		return nil, "parse_error"
 	end
 
@@ -224,6 +255,14 @@ function Github.get_events()
 		return filter_events(cached_events)
 	end
 
+	if os.time() - last_rate_error_time < RATE_LIMIT_COOLDOWN then
+		Debug.debug("GitHub", "In cooldown period, using cached events")
+		if cached_events then
+			return filter_events(cached_events)
+		end
+		return {}
+	end
+
 	local username = user_vars.github and user_vars.github.username or "linuxmobile"
 	Debug.debug("GitHub", "Fetching fresh events for user: %s", username)
 
@@ -237,9 +276,12 @@ function Github.get_events()
 		return filtered
 	end
 
-	if error_type == "rate_limit" and cached_events then
-		Debug.warn("GitHub", "Rate limited, falling back to cache")
-		return filter_events(cached_events)
+	if error_type == "rate_limit" then
+		last_rate_error_time = os.time()
+		Debug.warn("GitHub", "Rate limited, entering cooldown period")
+		if cached_events then
+			return filter_events(cached_events)
+		end
 	end
 
 	Debug.warn("GitHub", "No events available, returning empty or cached list")

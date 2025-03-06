@@ -4,6 +4,7 @@ local Astal = require("astal.gtk3").Astal
 local map = require("lua.lib.common").map
 local time = require("lua.lib.common").time
 local file_exists = require("lua.lib.common").file_exists
+local Debug = require("lua.lib.debug")
 
 local function is_icon(icon)
 	if not icon then
@@ -17,6 +18,11 @@ end
 
 ---@param props { setup?: function, on_hover_lost?: function, notification: any }
 return function(props)
+	if not props.notification then
+		Debug.error("Notification", "No notification data provided")
+		return nil
+	end
+
 	local n = props.notification
 
 	local image_path = nil
@@ -24,6 +30,9 @@ return function(props)
 
 	if app_icon and app_icon:match("^file://") then
 		image_path = app_icon:gsub("^file://", "")
+		if image_path and not file_exists(image_path) then
+			Debug.error("Notification", "Image file not found: %s", image_path)
+		end
 		app_icon = nil
 	end
 
@@ -47,7 +56,12 @@ return function(props)
 		}),
 		Widget.Button({
 			on_clicked = function()
-				n:dismiss()
+				local success, err = pcall(function()
+					n:dismiss()
+				end)
+				if not success then
+					Debug.error("Notification", "Failed to dismiss notification: %s", err)
+				end
 			end,
 			Widget.Icon({ icon = "window-close-symbolic" }),
 		}),
@@ -109,7 +123,12 @@ return function(props)
 					return Widget.Button({
 						hexpand = true,
 						on_clicked = function()
-							return n:invoke(id)
+							local success, err = pcall(function()
+								return n:invoke(id)
+							end)
+							if not success then
+								Debug.error("Notification", "Failed to invoke action: %s", err)
+							end
 						end,
 						Widget.Label({
 							label = label,

@@ -4,6 +4,7 @@ local Variable = astal.Variable
 local bind = astal.bind
 local cjson = require("cjson")
 local utf8 = require("lua-utf8")
+local Debug = require("lua.lib.debug")
 
 local function sanitize_utf8(text)
 	if not text then
@@ -26,6 +27,7 @@ end
 local function get_active_window()
 	local out, err = astal.exec("niri msg --json windows")
 	if err then
+		Debug.error("ActiveClient", "Failed to get window data: %s", err)
 		return nil
 	end
 
@@ -33,7 +35,8 @@ local function get_active_window()
 		return cjson.decode(out)
 	end)
 
-	if not success or not windows then
+	if not success then
+		Debug.error("ActiveClient", "Failed to decode window data")
 		return nil
 	end
 

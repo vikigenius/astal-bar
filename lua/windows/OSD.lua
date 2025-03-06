@@ -2,7 +2,7 @@ local astal = require("astal")
 local Widget = require("astal.gtk3").Widget
 local Wp = astal.require("AstalWp")
 local bind = astal.bind
-
+local Debug = require("lua.lib.debug")
 local timeout = astal.timeout
 
 local SHOW_TIMEOUT = 1500
@@ -52,6 +52,15 @@ local function create_osd_widget(current_timeout_ref)
 	local speaker = Wp.get_default().audio.default_speaker
 	local mic = Wp.get_default().audio.default_microphone
 
+	if not speaker or not mic then
+		Debug.error(
+			"OSD",
+			"Failed to get audio devices - Speaker: %s, Mic: %s",
+			speaker and "OK" or "NULL",
+			mic and "OK" or "NULL"
+		)
+	end
+
 	return Widget.Box({
 		class_name = "OSD",
 		vertical = true,
@@ -74,6 +83,7 @@ local function create_osd_widget(current_timeout_ref)
 
 			local function show_osd(widget)
 				if _G.AUDIO_CONTROL_UPDATING then
+					Debug.debug("OSD", "OSD update blocked: AUDIO_CONTROL_UPDATING is true")
 					return
 				end
 				hide_all()
@@ -89,7 +99,7 @@ local function create_osd_widget(current_timeout_ref)
 				end)
 			end
 
-			bind(speaker, "volume"):subscribe(function()
+			bind(speaker, "volume"):subscribe(function(vol)
 				show_osd(speaker_vol)
 			end)
 
@@ -97,7 +107,7 @@ local function create_osd_widget(current_timeout_ref)
 				show_osd(muted and speaker_mute or speaker_vol)
 			end)
 
-			bind(mic, "volume"):subscribe(function()
+			bind(mic, "volume"):subscribe(function(vol)
 				show_osd(mic_vol)
 			end)
 
@@ -109,8 +119,13 @@ local function create_osd_widget(current_timeout_ref)
 end
 
 return function(gdkmonitor)
-	local Anchor = astal.require("Astal").WindowAnchor
+	if not gdkmonitor then
+		Debug.error("OSD", "Failed to initialize OSD: gdkmonitor is nil")
+		return nil
+	end
+
 	local current_timeout_ref = { timer = nil }
+	local Anchor = astal.require("Astal").WindowAnchor
 
 	return Widget.Window({
 		class_name = "OSDWindow",

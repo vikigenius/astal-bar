@@ -8,6 +8,7 @@ local Tray = astal.require("AstalTray")
 local Network = astal.require("AstalNetwork")
 local Battery = astal.require("AstalBattery")
 local Wp = astal.require("AstalWp")
+local Debug = require("lua.lib.debug")
 
 local Workspaces = require("lua.widgets.Workspaces")
 local ActiveClient = require("lua.widgets.ActiveClient")
@@ -19,6 +20,7 @@ local active_variables = {}
 
 local function safe_bind(obj, prop)
 	if not obj then
+		Debug.error("Bar", "Failed to bind: object is nil")
 		return nil
 	end
 
@@ -27,7 +29,6 @@ local function safe_bind(obj, prop)
 	end)
 
 	if not success then
-		print("Binding failed:", binding)
 		return nil
 	end
 
@@ -36,7 +37,6 @@ end
 
 local function SysTray()
 	local tray = Tray.get_default()
-
 	return Widget.Box({
 		class_name = "SysTray",
 		bind(tray, "items"):as(function(items)
@@ -59,7 +59,6 @@ end
 
 local function Media()
 	local player = Mpris.Player.new("spotify")
-
 	return Widget.Box({
 		class_name = "Media",
 		visible = safe_bind(player, "available"),
@@ -131,7 +130,7 @@ local function GithubActivity()
 	})
 end
 
-local function AudioControl()
+local function AudioControl(monitor)
 	local audio = Wp.get_default().audio
 	local speaker = audio and audio.default_speaker
 	local mic = audio and audio.default_microphone
@@ -145,9 +144,11 @@ local function AudioControl()
 		else
 			if not audio_window then
 				local AudioControlWindow = require("lua.windows.AudioControl")
-				audio_window = AudioControlWindow.new()
+				audio_window = AudioControlWindow.new(monitor)
 			end
-			audio_window:show_all()
+			if audio_window then
+				audio_window:show_all()
+			end
 			window_visible = true
 		end
 	end
@@ -173,7 +174,7 @@ local function AudioControl()
 	})
 end
 
-local function Wifi()
+local function Wifi(monitor)
 	local network = Network.get_default()
 	local wifi = bind(network, "wifi")
 	local window_visible = false
@@ -186,9 +187,11 @@ local function Wifi()
 		else
 			if not network_window then
 				local NetworkWindow = require("lua.windows.Network")
-				network_window = NetworkWindow.new()
+				network_window = NetworkWindow.new(monitor)
 			end
-			network_window:show_all()
+			if network_window then
+				network_window:show_all()
+			end
 			window_visible = true
 		end
 	end
@@ -209,7 +212,7 @@ local function Wifi()
 	})
 end
 
-local function BatteryLevel()
+local function BatteryLevel(monitor)
 	local bat = Battery.get_default()
 	local window_visible = false
 	local battery_window = nil
@@ -221,9 +224,11 @@ local function BatteryLevel()
 		else
 			if not battery_window then
 				local BatteryWindow = require("lua.windows.Battery")
-				battery_window = BatteryWindow.new()
+				battery_window = BatteryWindow.new(monitor)
 			end
-			battery_window:show_all()
+			if battery_window then
+				battery_window:show_all()
+			end
 			window_visible = true
 		end
 	end
@@ -247,6 +252,11 @@ local function BatteryLevel()
 end
 
 return function(gdkmonitor)
+	if not gdkmonitor then
+		Debug.error("Bar", "No monitor available")
+		return nil
+	end
+
 	local Anchor = astal.require("Astal").WindowAnchor
 
 	local bar = Widget.Window({
@@ -265,7 +275,6 @@ return function(gdkmonitor)
 		Widget.CenterBox({
 			Widget.Box({
 				halign = "START",
-				-- Workspaces(),
 				ActiveClient(),
 			}),
 			Widget.Box({
@@ -277,9 +286,9 @@ return function(gdkmonitor)
 				GithubActivity(),
 				Vitals(),
 				SysTray(),
-				AudioControl(),
-				Wifi(),
-				BatteryLevel(),
+				AudioControl(gdkmonitor),
+				Wifi(gdkmonitor),
+				BatteryLevel(gdkmonitor),
 			}),
 		}),
 	})

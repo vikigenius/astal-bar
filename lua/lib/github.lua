@@ -7,6 +7,7 @@ local CACHE_DIR = GLib.get_user_cache_dir() .. "/astal"
 local CACHE_FILE = CACHE_DIR .. "/github-events.json"
 local CACHE_MIN_LIFETIME = 60
 local CACHE_MAX_LIFETIME = 300
+local CACHE_MAX_SIZE = 1024 * 1024
 local POLL_INTERVAL = 300000
 local MAX_RETRIES = 3
 local RETRY_DELAY = 10
@@ -14,10 +15,15 @@ local RATE_CHECK_INTERVAL = 900
 local RATE_LIMIT_COOLDOWN = 3600
 
 local state = {
-	last_rate_check = 0,
-	last_rate_status = true,
-	last_rate_remaining = 60,
-	last_rate_error_time = 0,
+	rate = {
+		last_check = 0,
+		status = true,
+		remaining = 60,
+		error_time = 0,
+	},
+	cache = {
+		last_cleanup = 0,
+	},
 }
 
 local Github = {
@@ -31,6 +37,22 @@ local function ensure_cache_dir()
 	if not GLib.file_test(CACHE_DIR, "EXISTS") then
 		GLib.mkdir_with_parents(CACHE_DIR, 0755)
 	end
+end
+
+local function cleanup_cache()
+	local current_time = os.time()
+	if current_time - state.cache.last_cleanup < 3600 then
+		return
+	end
+
+	if GLib.file_test(CACHE_FILE, "EXISTS") then
+		local size = GLib.file_get_contents(CACHE_FILE)
+		if size and #size > CACHE_MAX_SIZE then
+			os.remove(CACHE_FILE)
+		end
+	end
+
+	state.cache.last_cleanup = current_time
 end
 
 local function execute_curl(cmd)
@@ -54,8 +76,8 @@ local function load_cache()
 		return nil
 	end
 
-	local success, cache = pcall(cjson.decode, content)
-	if not success or type(cache) ~= "table" then
+	local decoded_ok, cache = pcall(cjson.decode, content)
+	if not decoded_ok or type(cache) ~= "table" then
 		return nil
 	end
 
@@ -75,10 +97,11 @@ local function save_cache(events)
 		return false
 	end
 	ensure_cache_dir()
+	cleanup_cache()
 
 	local cache = { timestamp = os.time(), events = events }
-	local success, encoded = pcall(cjson.encode, cache)
-	if not success then
+	local encoded_ok, encoded = pcall(cjson.encode, cache)
+	if not encoded_ok then
 		return false
 	end
 
@@ -102,14 +125,14 @@ end
 local function check_rate_limit()
 	local current_time = os.time()
 
-	if current_time - state.last_rate_error_time < RATE_LIMIT_COOLDOWN then
+	if current_time - state.rate.error_time < RATE_LIMIT_COOLDOWN then
 		Debug.debug("GitHub", "In rate limit cooldown period")
 		return false
 	end
 
-	if current_time - state.last_rate_check < RATE_CHECK_INTERVAL then
-		Debug.debug("GitHub", "Using cached rate limit status (remaining: %d)", state.last_rate_remaining)
-		return state.last_rate_status
+	if current_time - state.rate.last_check < RATE_CHECK_INTERVAL then
+		Debug.debug("GitHub", "Using cached rate limit status (remaining: %d)", state.rate.remaining)
+		return state.rate.status
 	end
 
 	local rate_limit_check = execute_curl(table.concat({
@@ -120,29 +143,29 @@ local function check_rate_limit()
 
 	if not rate_limit_check then
 		Debug.warn("GitHub", "Rate limit check failed")
-		state.last_rate_error_time = current_time
+		state.rate.error_time = current_time
 		return false
 	end
 
-	local success, rate_data = pcall(cjson.decode, rate_limit_check)
-	if not success or not rate_data or not rate_data.resources or not rate_data.resources.core then
+	local rate_ok, rate_data = pcall(cjson.decode, rate_limit_check)
+	if not rate_ok or not rate_data or not rate_data.resources or not rate_data.resources.core then
 		Debug.warn("GitHub", "Invalid rate limit response")
-		state.last_rate_error_time = current_time
+		state.rate.error_time = current_time
 		return false
 	end
 
 	local remaining = rate_data.resources.core.remaining
-	state.last_rate_remaining = remaining
-	state.last_rate_check = current_time
+	state.rate.remaining = remaining
+	state.rate.last_check = current_time
 
 	if remaining < 10 then
 		Debug.warn("GitHub", "Rate limit low")
-		state.last_rate_error_time = current_time
-		state.last_rate_status = false
+		state.rate.error_time = current_time
+		state.rate.status = false
 		return false
 	end
 
-	state.last_rate_status = true
+	state.rate.status = true
 	return true
 end
 
@@ -176,9 +199,9 @@ local function fetch_github_events(username, attempt)
 		return nil, "network_error"
 	end
 
-	local success, events = pcall(cjson.decode, output)
-	if not success or type(events) ~= "table" then
-		Debug.error("GitHub", "Parse error: %s", success and "invalid format" or events)
+	local parse_ok, events = pcall(cjson.decode, output)
+	if not parse_ok or type(events) ~= "table" then
+		Debug.error("GitHub", "Parse error: %s", parse_ok and "invalid format" or events)
 		return nil, "parse_error"
 	end
 
@@ -191,7 +214,7 @@ function Github.get_events()
 		return cached_events
 	end
 
-	if os.time() - state.last_rate_error_time < RATE_LIMIT_COOLDOWN then
+	if os.time() - state.rate.error_time < RATE_LIMIT_COOLDOWN then
 		return cached_events or {}
 	end
 

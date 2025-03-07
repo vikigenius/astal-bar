@@ -5,14 +5,43 @@ local Variable = astal.Variable
 local map = require("lua.lib.common").map
 local cjson = require("cjson")
 local Debug = require("lua.lib.debug")
+local Gio = require("lgi").Gio
+local GLib = require("lgi").GLib
 
 local monitor_order = { "eDP-1", "HDMI-A-1" }
-local monitor_cache = { timestamp = 0, data = {} }
+
+local cache = {
+	monitors = {
+		timestamp = 0,
+		data = {},
+		max_age = 5,
+	},
+	workspaces = {
+		hash = "",
+		data = {},
+		max_entries = 50,
+	},
+}
+
+local rate_limiter = {
+	last_monitor_fetch = 0,
+	last_workspace_fetch = 0,
+	monitor_interval = 5000,
+	workspace_interval = 250,
+}
 
 local function get_niri_monitors()
-	if os.time() - monitor_cache.timestamp < 5 then
-		return monitor_cache.data
+	local current_time = GLib.get_monotonic_time() / 1000000
+
+	if current_time - cache.monitors.timestamp < cache.monitors.max_age then
+		return cache.monitors.data
 	end
+
+	if current_time - rate_limiter.last_monitor_fetch < (rate_limiter.monitor_interval / 1000) then
+		return cache.monitors.data
+	end
+
+	rate_limiter.last_monitor_fetch = current_time
 
 	local out, err = astal.exec("niri msg --json outputs")
 	if err then
@@ -37,23 +66,31 @@ local function get_niri_monitors()
 		end
 	end
 
-	monitor_cache.timestamp = os.time()
-	monitor_cache.data = monitor_array
+	cache.monitors.timestamp = current_time
+	cache.monitors.data = monitor_array
+
 	return monitor_array
 end
 
-local workspace_cache = { hash = "", data = {} }
 local function process_workspace_data()
+	local current_time = GLib.get_monotonic_time() / 1000000
+
+	if current_time - rate_limiter.last_workspace_fetch < (rate_limiter.workspace_interval / 1000) then
+		return cache.workspaces.data
+	end
+
+	rate_limiter.last_workspace_fetch = current_time
+
 	local out, err = astal.exec("niri msg --json workspaces")
 	if err then
 		Debug.error("Workspaces", "Failed to get workspace data: %s", err)
-		return workspace_cache.data
+		return cache.workspaces.data
 	end
 
 	local success, workspaces = pcall(cjson.decode, out)
 	if not success then
 		Debug.error("Workspaces", "Failed to decode workspace data")
-		return workspace_cache.data
+		return cache.workspaces.data
 	end
 
 	local state_hash = table.concat(
@@ -63,12 +100,13 @@ local function process_workspace_data()
 		"|"
 	)
 
-	if workspace_cache.hash == state_hash then
-		return workspace_cache.data
+	if cache.workspaces.hash == state_hash then
+		return cache.workspaces.data
 	end
 
 	local monitors = get_niri_monitors()
 	local output_workspaces = {}
+
 	for _, workspace in ipairs(workspaces) do
 		output_workspaces[workspace.output] = output_workspaces[workspace.output] or {}
 		table.insert(output_workspaces[workspace.output], {
@@ -91,8 +129,9 @@ local function process_workspace_data()
 		})
 	end
 
-	workspace_cache.hash = state_hash
-	workspace_cache.data = workspace_data
+	cache.workspaces.hash = state_hash
+	cache.workspaces.data = workspace_data
+
 	return workspace_data
 end
 
@@ -140,23 +179,31 @@ local function create_workspace_variables()
 		return (ws_data and monitors) and ws_data or {}
 	end)
 
-	workspace_data:poll(250, function()
+	local workspace_source = Gio.Cancellable()
+	workspace_data:poll(rate_limiter.workspace_interval, function()
+		if workspace_source:is_cancelled() then
+			return nil
+		end
 		local data = process_workspace_data()
 		workspace_data:set(data)
 		return data
 	end)
 
-	monitors_var:poll(5000, function()
+	local monitor_source = Gio.Cancellable()
+	monitors_var:poll(rate_limiter.monitor_interval, function()
+		if monitor_source:is_cancelled() then
+			return nil
+		end
 		local monitors = get_niri_monitors()
 		monitors_var:set(monitors)
 		return monitors
 	end)
 
-	return workspace_data, monitors_var, workspaces
+	return workspace_data, monitors_var, workspaces, workspace_source, monitor_source
 end
 
 return function()
-	local workspace_data, monitors_var, workspaces = create_workspace_variables()
+	local workspace_data, monitors_var, workspaces, workspace_source, monitor_source = create_workspace_variables()
 
 	return Widget.Box({
 		class_name = "Workspaces",
@@ -172,9 +219,13 @@ return function()
 			end)
 		end),
 		on_destroy = function()
+			workspace_source:cancel()
+			monitor_source:cancel()
 			workspace_data:drop()
 			monitors_var:drop()
 			workspaces:drop()
+			cache.monitors.data = {}
+			cache.workspaces.data = {}
 		end,
 	})
 end

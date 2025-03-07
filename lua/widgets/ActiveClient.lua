@@ -7,10 +7,7 @@ local utf8 = require("lua-utf8")
 local Debug = require("lua.lib.debug")
 
 local function sanitize_utf8(text)
-	if not text then
-		return ""
-	end
-	return utf8.gsub(text, "[%z\1-\31\127]", "")
+	return text and utf8.gsub(text, "[%z\1-\31\127]", "") or ""
 end
 
 local function truncate_text(text, length)
@@ -18,10 +15,7 @@ local function truncate_text(text, length)
 		return ""
 	end
 	text = sanitize_utf8(text)
-	if utf8.len(text) > length then
-		return utf8.sub(text, 1, length) .. "..."
-	end
-	return text
+	return utf8.len(text) > length and utf8.sub(text, 1, length) .. "..." or text
 end
 
 local function get_active_window()
@@ -31,10 +25,7 @@ local function get_active_window()
 		return nil
 	end
 
-	local success, windows = pcall(function()
-		return cjson.decode(out)
-	end)
-
+	local success, windows = pcall(cjson.decode, out)
 	if not success then
 		Debug.error("ActiveClient", "Failed to decode window data")
 		return nil
@@ -45,25 +36,24 @@ local function get_active_window()
 			return window
 		end
 	end
-
 	return nil
 end
 
-local function ActiveClientWidget()
-	local active_window = Variable.derive(
-		{ Variable({}):poll(400, function()
-			return get_active_window() or {}
-		end) },
-		function(window)
-			return window
-		end
-	)
+local function create_window_variable()
+	local var = Variable({})
+	return var:poll(400, function()
+		return get_active_window() or {}
+	end)
+end
 
-	local app_id_var = Variable.derive({ bind(active_window) }, function(window)
+return function()
+	local window_var = create_window_variable()
+
+	local app_id_var = Variable.derive({ bind(window_var) }, function(window)
 		return sanitize_utf8(window.app_id or "Desktop")
 	end)
 
-	local title_var = Variable.derive({ bind(active_window) }, function(window)
+	local title_var = Variable.derive({ bind(window_var) }, function(window)
 		return truncate_text(window.title or "niri", 40)
 	end)
 
@@ -79,18 +69,14 @@ local function ActiveClientWidget()
 			Widget.Label({
 				class_name = "window-title",
 				label = bind(title_var),
-				ellipsize = "END",
 				halign = "START",
+				ellipsize = "END",
 			}),
 		}),
 		on_destroy = function()
-			active_window:drop()
+			window_var:drop()
 			app_id_var:drop()
 			title_var:drop()
 		end,
 	})
-end
-
-return function()
-	return ActiveClientWidget()
 end

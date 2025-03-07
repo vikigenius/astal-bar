@@ -19,10 +19,10 @@ local function AvatarImage(url)
 		class_name = "avatar-image",
 		css = string.format(
 			[[
-      background-image: url('%s');
-      background-size: cover;
-      border-radius: 8px;
-    ]],
+            background-image: url('%s');
+            background-size: cover;
+            border-radius: 8px;
+        ]],
 			url
 		),
 		width_request = 40,
@@ -36,9 +36,7 @@ local function LoadingIndicator()
 		valign = "CENTER",
 		halign = "CENTER",
 		vexpand = true,
-		Widget.Label({
-			label = "Loading GitHub events...",
-		}),
+		Widget.Label({ label = "Loading GitHub events..." }),
 	})
 end
 
@@ -48,9 +46,7 @@ local function ErrorIndicator()
 		valign = "CENTER",
 		halign = "CENTER",
 		vexpand = true,
-		Widget.Label({
-			label = "Failed to fetch events",
-		}),
+		Widget.Label({ label = "Failed to fetch events" }),
 	})
 end
 
@@ -59,7 +55,7 @@ local function EventItem(props, close_window)
 		class_name = "github-event-item",
 		on_clicked = function()
 			close_window()
-			GLib.spawn_command_line_async(string.format("xdg-open %s", props.url))
+			GLib.spawn_command_line_async("xdg-open " .. props.url)
 		end,
 		child = Widget.Box({
 			orientation = "HORIZONTAL",
@@ -99,41 +95,44 @@ local function EventItem(props, close_window)
 	})
 end
 
+local function create_events_handler()
+	local events_var = Variable.new({})
+
+	local function process_events(github_events)
+		if not github_events then
+			return { error = true }
+		end
+		if #github_events == 0 then
+			return { empty = true }
+		end
+		return map(github_events, function(event)
+			return {
+				type = format_event_type(event.type),
+				actor = event.actor.login,
+				repo = format_repo_name(event.repo),
+				time = Github.format_time(event.created_at),
+				avatar_url = event.actor.avatar_url,
+				url = "https://github.com/" .. event.repo.name,
+			}
+		end)
+	end
+
+	local function fetch_events()
+		events_var:set(process_events(Github.get_events()))
+	end
+
+	return events_var, fetch_events
+end
+
 local function GithubFeed(close_window)
 	return Widget.Scrollable({
 		vscrollbar_policy = "AUTOMATIC",
 		hscrollbar_policy = "NEVER",
 		class_name = "github-feed",
 		setup = function(self)
-			local events_var = Variable.new({})
-
-			local function fetch_events()
-				local github_events = Github.get_events()
-				if not github_events then
-					events_var:set({ error = true })
-					return
-				end
-
-				if #github_events == 0 then
-					events_var:set({ empty = true })
-					return
-				end
-
-				local formatted_events = map(github_events, function(event)
-					return {
-						type = format_event_type(event.type),
-						actor = event.actor.login,
-						repo = format_repo_name(event.repo),
-						time = Github.format_time(event.created_at),
-						avatar_url = event.actor.avatar_url,
-						url = string.format("https://github.com/%s", event.repo.name),
-					}
-				end)
-
-				events_var:set(formatted_events)
-			end
-
+			local events_var, fetch_events = create_events_handler()
 			fetch_events()
+
 			local timer = GLib.timeout_add(GLib.PRIORITY_DEFAULT, Github.POLL_INTERVAL, function()
 				fetch_events()
 				return true

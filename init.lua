@@ -5,6 +5,7 @@ local Debug = require("lua.lib.debug")
 Debug.info("App", "Starting astal-bar")
 Debug.info("App", "Modules loaded successfully")
 
+local Desktop = require("lua.windows.Desktop")
 local Bar = require("lua.windows.Bar")
 local Dock = require("lua.windows.Dock")
 local NotificationPopups = require("lua.windows.NotificationPopups")
@@ -67,6 +68,7 @@ App:start({
 			end
 
 			local windows = {
+				desktop = Desktop(monitor),
 				bar = Bar(monitor),
 				dock = Dock(monitor),
 				notifications = NotificationPopups(monitor),

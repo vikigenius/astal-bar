@@ -6,15 +6,37 @@
 .Bar {
   @include unset($rec: true);
 
-  > centerbox {
-    @include window;
-    padding: to-rem(8px);
+  .left-box {
+    background-color: $surface0;
+    border-radius: to-rem(20px);
+    padding: to-rem(10px) to-rem(16px);
+    margin: to-rem(20px) 0 0 to-rem(20px);
+  }
+
+  .center-box {
+    background-color: $surface0;
+    border-radius: to-rem(20px);
+    padding: to-rem(10px) to-rem(16px);
+    margin: to-rem(20px) 0 0 to-rem(20px);
+  }
+
+  .right-box {
+    background-color: $surface0;
+    border-radius: to-rem(20px);
+    padding: to-rem(10px) to-rem(16px);
+    margin: to-rem(20px) to-rem(20px) 0 0;
   }
 
   @include ActiveClient;
 
   .github-button {
     @include button;
+  }
+
+  .systray- {
+    button {
+      @include button;
+    }
   }
 
   .audio-button {
@@ -26,6 +48,10 @@
   }
 
   .battery-button {
+    @include button;
+  }
+
+  .clock-button {
     @include button;
   }
 }

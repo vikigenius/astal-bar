@@ -1,13 +1,10 @@
 @use "../abstracts" as *;
 
 .Workspaces {
-  margin: to-rem(4px) to-rem(8px) to-rem(4px) 0;
-  padding: to-rem(2px) to-rem(2px) to-rem(2px) 0;
-
   .monitor-workspaces {
     background-color: gtkalpha($surface1, 0.6);
     border-radius: to-rem(50px);
-    padding: to-rem(4px) to-rem(8px) to-rem(4px) to-rem(6px);
+    padding: to-rem(8px) to-rem(8px);
     margin: 0 to-rem(4px) 0 0;
 
     &.monitor-1 .workspace-button {

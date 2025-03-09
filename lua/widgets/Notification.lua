@@ -5,8 +5,6 @@ local map = require("lua.lib.common").map
 local time = require("lua.lib.common").time
 local file_exists = require("lua.lib.common").file_exists
 local Debug = require("lua.lib.debug")
-local Variable = require("astal.variable")
-local bind = require("astal").bind
 
 local function is_icon(icon)
 	if not icon then

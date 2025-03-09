@@ -15,6 +15,6 @@ return {
 	},
 	monitor = {
 		mode = "specific", -- Can be "primary", "all", or "specific"
-		specific_monitor = 1,
+		specific_monitor = 2,
 	},
 }

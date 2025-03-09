@@ -24,7 +24,7 @@ local battery_window = nil
 local function SysTray()
 	local tray = Tray.get_default()
 	return Widget.Box({
-		class_name = "SysTray",
+		class_name = "systray-",
 		bind(tray, "items"):as(function(items)
 			return map(items or {}, function(item)
 				return Widget.MenuButton({
@@ -84,7 +84,7 @@ local function Time(format)
 	end)
 
 	return Widget.Label({
-		class_name = "Time",
+		class_name = "clock-button",
 		label = bind(time),
 		setup = function(self)
 			self:hook(self, "destroy", function()
@@ -291,14 +291,16 @@ return function(gdkmonitor)
 		Widget.CenterBox({
 			Widget.Box({
 				halign = "START",
-				-- Workspaces(),
+				class_name = "left-box",
 				ActiveClient(),
 			}),
 			Widget.Box({
-				Time("%A %d, %H:%M"),
+				class_name = "center-box",
+				Workspaces(),
 				Media(),
 			}),
 			Widget.Box({
+				class_name = "right-box",
 				halign = "END",
 				GithubActivity(),
 				Vitals(),
@@ -306,6 +308,7 @@ return function(gdkmonitor)
 				AudioControl(gdkmonitor),
 				Wifi(gdkmonitor),
 				BatteryLevel(gdkmonitor),
+				Time("%A %d, %H:%M"),
 			}),
 		}),
 	})

@@ -297,13 +297,13 @@ return function(gdkmonitor)
 			Widget.Box({
 				class_name = "center-box",
 				Workspaces(),
-				Media(),
+				-- Media(),
 			}),
 			Widget.Box({
 				class_name = "right-box",
 				halign = "END",
 				GithubActivity(),
-				Vitals(),
+				-- Vitals(),
 				SysTray(),
 				AudioControl(gdkmonitor),
 				Wifi(gdkmonitor),

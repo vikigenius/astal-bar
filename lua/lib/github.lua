@@ -5,10 +5,7 @@ local Debug = require("lua.lib.debug")
 
 local CACHE_DIR = GLib.get_user_cache_dir() .. "/astal"
 local CACHE_FILE = CACHE_DIR .. "/github-events.json"
-local CACHE_MIN_LIFETIME = 60
-local CACHE_MAX_LIFETIME = 300
 local CACHE_MAX_SIZE = 1024 * 1024
-local POLL_INTERVAL = 300000
 local MAX_RETRIES = 3
 local RETRY_DELAY = 10
 local RATE_CHECK_INTERVAL = 900
@@ -26,9 +23,7 @@ local state = {
 	},
 }
 
-local Github = {
-	POLL_INTERVAL = POLL_INTERVAL,
-}
+local Github = {}
 
 local config_path = debug.getinfo(1).source:match("@?(.*/)") .. "../../user-variables.lua"
 local user_vars = loadfile(config_path)()
@@ -66,7 +61,7 @@ local function execute_curl(cmd)
 end
 
 local function load_cache()
-	Debug.debug("GitHub", "Attempting to load cache")
+	Debug.debug("GitHub", "Loading cached events")
 	if not GLib.file_test(CACHE_FILE, "EXISTS") then
 		return nil
 	end
@@ -81,15 +76,7 @@ local function load_cache()
 		return nil
 	end
 
-	local age = os.time() - (cache.timestamp or 0)
-	if age < CACHE_MIN_LIFETIME then
-		Debug.debug("GitHub", "Cache is fresh (age: %d seconds)", age)
-		return cache.events, false
-	elseif age > CACHE_MAX_LIFETIME then
-		Debug.debug("GitHub", "Cache is expired (age: %d seconds)", age)
-		return cache.events, true
-	end
-	return cache.events, false
+	return cache.events, cache.last_update or 0
 end
 
 local function save_cache(events)
@@ -99,7 +86,11 @@ local function save_cache(events)
 	ensure_cache_dir()
 	cleanup_cache()
 
-	local cache = { timestamp = os.time(), events = events }
+	local cache = {
+		last_update = os.time(),
+		events = events,
+	}
+
 	local encoded_ok, encoded = pcall(cjson.encode, cache)
 	if not encoded_ok then
 		return false
@@ -209,24 +200,33 @@ local function fetch_github_events(username, attempt)
 end
 
 function Github.get_events()
-	local cached_events, is_expired = load_cache()
-	if cached_events and not is_expired then
-		return cached_events
+	local cached_events, last_update = load_cache()
+
+	if cached_events then
+		return cached_events, last_update
 	end
 
+	return Github.update_events()
+end
+
+function Github.update_events()
+	Debug.debug("GitHub", "Fetching new GitHub events")
+
 	if os.time() - state.rate.error_time < RATE_LIMIT_COOLDOWN then
-		return cached_events or {}
+		Debug.warn("GitHub", "In rate limit cooldown")
+		return {}, 0
 	end
 
 	local username = user_vars.github and user_vars.github.username or "linuxmobile"
 	local events = fetch_github_events(username)
+	local current_time = os.time()
 
 	if events and #events > 0 then
 		save_cache(events)
-		return events
+		return events, current_time
 	end
 
-	return cached_events or {}
+	return {}, 0
 end
 
 function Github.format_time(iso_time)
@@ -249,6 +249,24 @@ function Github.format_time(iso_time)
 		return string.format("%d hours ago", math.floor(diff / 3600))
 	else
 		return string.format("%d days ago", math.floor(diff / 86400))
+	end
+end
+
+function Github.format_last_update(timestamp)
+	if not timestamp or timestamp == 0 then
+		return "Never updated"
+	end
+
+	local diff = os.time() - timestamp
+
+	if diff < 60 then
+		return "Updated just now"
+	elseif diff < 3600 then
+		return string.format("Updated %d minutes ago", math.floor(diff / 60))
+	elseif diff < 86400 then
+		return string.format("Updated %d hours ago", math.floor(diff / 3600))
+	else
+		return string.format("Updated %d days ago", math.floor(diff / 86400))
 	end
 end
 

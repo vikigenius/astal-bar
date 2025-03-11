@@ -5,6 +5,7 @@ local Variable = astal.Variable
 local GLib = astal.require("GLib")
 local map = require("lua.lib.common").map
 local Github = require("lua.lib.github")
+local Debug = require("lua.lib.debug")
 
 local function format_event_type(type)
 	return type:gsub("Event", ""):lower()
@@ -96,13 +97,18 @@ local function EventItem(props, close_window)
 end
 
 local function create_events_handler()
-	local events_var = Variable.new({})
+	local events_var = Variable.new({ loading = true })
+	local last_update_var = Variable.new("")
+	local is_loading_var = Variable.new(true)
+	local update_label_visible = Variable.new(false)
 
 	local function process_events(github_events)
 		if not github_events then
+			Debug.warn("GitHub", "Failed to process events: empty data")
 			return { error = true }
 		end
 		if #github_events == 0 then
+			Debug.debug("GitHub", "No events received from API")
 			return { empty = true }
 		end
 		return map(github_events, function(event)
@@ -117,50 +123,114 @@ local function create_events_handler()
 		end)
 	end
 
-	local function fetch_events()
-		events_var:set(process_events(Github.get_events()))
+	local function load_events()
+		GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, function()
+			local events, timestamp = Github.get_events()
+			events_var:set(process_events(events))
+
+			if timestamp and timestamp > 0 then
+				last_update_var:set(Github.format_last_update(timestamp))
+			else
+				last_update_var:set("Updated just now")
+			end
+
+			update_label_visible:set(true)
+			is_loading_var:set(false)
+			return false
+		end)
 	end
 
-	return events_var, fetch_events
+	local function update_events()
+		is_loading_var:set(true)
+		events_var:set({ loading = true })
+		last_update_var:set("Updating...")
+
+		GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, function()
+			local events, timestamp = Github.update_events()
+			events_var:set(process_events(events))
+			last_update_var:set(Github.format_last_update(timestamp))
+			is_loading_var:set(false)
+			return false
+		end)
+	end
+
+	return events_var, last_update_var, is_loading_var, update_label_visible, load_events, update_events
 end
 
-local function GithubFeed(close_window)
-	return Widget.Scrollable({
-		vscrollbar_policy = "AUTOMATIC",
-		hscrollbar_policy = "NEVER",
-		class_name = "github-feed",
-		setup = function(self)
-			local events_var, fetch_events = create_events_handler()
-			fetch_events()
+local function GithubContent(close_window)
+	local events_var, last_update_var, is_loading_var, update_label_visible, load_events, update_events =
+		create_events_handler()
 
-			local timer = GLib.timeout_add(GLib.PRIORITY_DEFAULT, Github.POLL_INTERVAL, function()
-				fetch_events()
-				return true
-			end)
+	load_events()
 
-			self.child = Widget.Box({
-				orientation = "VERTICAL",
-				spacing = 8,
-				bind(events_var):as(function(evt)
-					if evt.error then
-						return ErrorIndicator()
-					end
-					if evt.empty or #evt == 0 then
-						return LoadingIndicator()
-					end
-					return Widget.Box({
+	return Widget.Box({
+		orientation = "VERTICAL",
+		spacing = 8,
+		Widget.Box({
+			class_name = "header",
+			orientation = "HORIZONTAL",
+			spacing = 10,
+			Widget.Icon({
+				icon = os.getenv("PWD") .. "/icons/github-symbolic.svg",
+			}),
+			Widget.Label({
+				label = "GitHub Activity",
+				xalign = 0,
+				hexpand = true,
+			}),
+		}),
+		Widget.Box({
+			class_name = "update-bar",
+			orientation = "HORIZONTAL",
+			spacing = 8,
+			visible = bind(update_label_visible),
+			Widget.Label({
+				label = bind(last_update_var),
+				xalign = 0,
+				hexpand = true,
+			}),
+			Widget.Button({
+				class_name = "refresh-button",
+				child = Widget.Icon({
+					icon = "view-refresh-symbolic",
+				}),
+				sensitive = bind(is_loading_var, function(loading)
+					return not loading
+				end),
+				on_clicked = update_events,
+			}),
+		}),
+		Widget.Box({
+			vexpand = true,
+			hexpand = true,
+			class_name = "github-feed-container",
+			child = bind(events_var):as(function(evt)
+				if evt.error then
+					return ErrorIndicator()
+				end
+				if evt.empty or #evt == 0 or evt.loading then
+					return LoadingIndicator()
+				end
+				return Widget.Scrollable({
+					vscrollbar_policy = "AUTOMATIC",
+					hscrollbar_policy = "NEVER",
+					class_name = "github-feed",
+					child = Widget.Box({
 						orientation = "VERTICAL",
 						spacing = 8,
 						map(evt, function(event)
 							return EventItem(event, close_window)
 						end),
-					})
-				end),
-			})
-
+					}),
+				})
+			end),
+		}),
+		setup = function(self)
 			self:hook(self, "destroy", function()
-				GLib.source_remove(timer)
 				events_var:drop()
+				last_update_var:drop()
+				is_loading_var:drop()
+				update_label_visible:drop()
 			end)
 		end,
 	})
@@ -185,23 +255,9 @@ function GithubWindow.new(gdkmonitor)
 		class_name = "GithubWindow",
 		gdkmonitor = gdkmonitor,
 		anchor = Anchor.TOP + Anchor.RIGHT,
-		child = Widget.Box({
-			orientation = "VERTICAL",
-			spacing = 10,
-			Widget.Box({
-				class_name = "header",
-				orientation = "HORIZONTAL",
-				spacing = 10,
-				Widget.Icon({
-					icon = os.getenv("PWD") .. "/icons/github-symbolic.svg",
-				}),
-				Widget.Label({
-					label = "GitHub Activity",
-					xalign = 0,
-				}),
-			}),
-			GithubFeed(close_window),
-		}),
+		width_request = 420,
+		height_request = 400,
+		child = GithubContent(close_window),
 	})
 
 	return window

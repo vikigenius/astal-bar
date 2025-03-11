@@ -263,14 +263,14 @@ local function VisibleNetworks(parent)
 					child = Widget.Box({
 						orientation = "HORIZONTAL",
 						spacing = 10,
-						Widget.Icon({ icon = item.icon_name }),
+						Widget.Icon({ icon = item.icon_name or "network-wireless-symbolic" }),
 						Widget.Label({
-							label = item.ssid,
+							label = item.ssid or "",
 							xalign = 0,
 							hexpand = true,
 						}),
 						Widget.Label({
-							label = string.format("%d%%", item.strength),
+							label = item.strength and string.format("%d%%", item.strength) or "N/A",
 							xalign = 1,
 						}),
 					}),

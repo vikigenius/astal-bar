@@ -101,6 +101,7 @@ local function create_events_handler()
 	local last_update_var = Variable.new("")
 	local is_loading_var = Variable.new(true)
 	local update_label_visible = Variable.new(false)
+	local update_timer_id = nil
 
 	local function process_events(github_events)
 		if not github_events then
@@ -123,6 +124,20 @@ local function create_events_handler()
 		end)
 	end
 
+	local function start_update_timer()
+		if update_timer_id then
+			GLib.source_remove(update_timer_id)
+		end
+
+		update_timer_id = GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, 60, function()
+			local timestamp = Github.get_last_update_time()
+			if timestamp and timestamp > 0 and update_label_visible:get() then
+				last_update_var:set(Github.format_last_update(timestamp))
+			end
+			return true
+		end)
+	end
+
 	local function load_events()
 		GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, function()
 			local events, timestamp = Github.get_events()
@@ -136,6 +151,7 @@ local function create_events_handler()
 
 			update_label_visible:set(true)
 			is_loading_var:set(false)
+			start_update_timer()
 			return false
 		end)
 	end
@@ -154,16 +170,40 @@ local function create_events_handler()
 		end)
 	end
 
-	return events_var, last_update_var, is_loading_var, update_label_visible, load_events, update_events
+	local function cleanup()
+		if update_timer_id then
+			GLib.source_remove(update_timer_id)
+			update_timer_id = nil
+		end
+	end
+
+	return events_var, last_update_var, is_loading_var, update_label_visible, load_events, update_events, cleanup
 end
 
-local function GithubContent(close_window)
-	local events_var, last_update_var, is_loading_var, update_label_visible, load_events, update_events =
+local GithubWindow = {}
+
+function GithubWindow.new(gdkmonitor)
+	local Anchor = astal.require("Astal").WindowAnchor
+	local window
+	local is_closing = false
+	local update_events_func
+	local first_map = true
+
+	local function close_window()
+		if window and not is_closing then
+			is_closing = true
+			window:hide()
+			is_closing = false
+		end
+	end
+
+	local events_var, last_update_var, is_loading_var, update_label_visible, load_events, update_events, cleanup_timer =
 		create_events_handler()
+	update_events_func = update_events
 
 	load_events()
 
-	return Widget.Box({
+	local content = Widget.Box({
 		orientation = "VERTICAL",
 		spacing = 8,
 		Widget.Box({
@@ -194,10 +234,14 @@ local function GithubContent(close_window)
 				child = Widget.Icon({
 					icon = "view-refresh-symbolic",
 				}),
-				sensitive = bind(is_loading_var, function(loading)
-					return not loading
-				end),
-				on_clicked = update_events,
+				on_clicked = function()
+					if not is_loading_var:get() then
+						Debug.debug("GitHub", "Refresh button clicked")
+						update_events()
+					else
+						Debug.debug("GitHub", "Refresh button clicked but loading is in progress")
+					end
+				end,
 			}),
 		}),
 		Widget.Box({
@@ -226,30 +270,21 @@ local function GithubContent(close_window)
 			end),
 		}),
 		setup = function(self)
+			if Github and type(Github.mark_viewed) == "function" then
+				Github.mark_viewed()
+			end
+
 			self:hook(self, "destroy", function()
 				events_var:drop()
 				last_update_var:drop()
 				is_loading_var:drop()
 				update_label_visible:drop()
+				if cleanup_timer then
+					cleanup_timer()
+				end
 			end)
 		end,
 	})
-end
-
-local GithubWindow = {}
-
-function GithubWindow.new(gdkmonitor)
-	local Anchor = astal.require("Astal").WindowAnchor
-	local window
-	local is_closing = false
-
-	local function close_window()
-		if window and not is_closing then
-			is_closing = true
-			window:hide()
-			is_closing = false
-		end
-	end
 
 	window = Widget.Window({
 		class_name = "GithubWindow",
@@ -257,7 +292,33 @@ function GithubWindow.new(gdkmonitor)
 		anchor = Anchor.TOP + Anchor.RIGHT,
 		width_request = 420,
 		height_request = 400,
-		child = GithubContent(close_window),
+		child = content,
+		setup = function(self)
+			self:hook(self, "map", function()
+				if first_map then
+					first_map = false
+					if Github and type(Github.mark_viewed) == "function" then
+						Github.mark_viewed()
+					end
+
+					local needs_update = false
+					if Github and type(Github.get_last_update_time) == "function" then
+						local last_update = Github.get_last_update_time()
+						local current_time = os.time()
+						needs_update = (last_update == 0 or (current_time - last_update > 1800))
+					end
+
+					if needs_update then
+						GLib.timeout_add(GLib.PRIORITY_DEFAULT, 1000, function()
+							if not is_closing and update_events_func then
+								update_events_func()
+							end
+							return false
+						end)
+					end
+				end
+			end)
+		end,
 	})
 
 	return window

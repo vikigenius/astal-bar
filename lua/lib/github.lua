@@ -20,6 +20,7 @@ local state = {
 	},
 	cache = {
 		last_cleanup = 0,
+		last_viewed = 0,
 	},
 }
 
@@ -227,6 +228,15 @@ function Github.update_events()
 	end
 
 	return {}, 0
+end
+
+function Github.get_last_update_time()
+	local _, timestamp = load_cache()
+	return timestamp or 0
+end
+
+function Github.mark_viewed()
+	state.cache.last_viewed = os.time()
 end
 
 function Github.format_time(iso_time)

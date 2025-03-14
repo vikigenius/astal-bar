@@ -6,97 +6,195 @@ window.AudioControlWindow {
 
   > box {
     background-color: $surface0;
-    border-radius: to-rem(12px);
-    border: to-rem(1px) solid gtkalpha($border, 0.2);
+    border-radius: to-rem(24px);
+    border: to-rem(1px) solid gtkalpha($border, 0.15);
     min-width: to-rem(350px);
-    margin: to-rem(12px) to-rem(120px);
+    margin: to-rem(12px) to-rem(90px);
 
-    .volume-controls {
+    .volume-controls-container {
+      background-color: gtkalpha($surface1, 0.5);
+      border-radius: to-rem(20px);
+      padding: to-rem(15px);
       margin-bottom: to-rem(16px);
 
-      box {
-        .mute-button {
-          @include button;
-          padding: to-rem(8px);
-          margin: 0;
+      .speaker-control,
+      .microphone-control {
+        margin: to-rem(5px) 0;
 
-          icon {
-            font-size: to-rem(20px);
-          }
-        }
-
-        scale {
-          margin: to-rem(4px) to-rem(8px);
-
-          trough {
-            background-color: gtkalpha($surface1, 0.6);
-            border-radius: to-rem(6px);
-            min-height: to-rem(6px);
-
-            highlight {
-              background-color: $primary;
-              border-radius: to-rem(6px);
-            }
-          }
-
-          slider {
-            background-color: $text;
-            border-radius: 50%;
-            min-height: to-rem(16px);
-            min-width: to-rem(16px);
-            margin: to-rem(-5px);
-          }
+        .speaker-icon,
+        .microphone-icon {
+          font-size: to-rem(20px);
+          color: $primary;
+          margin-right: to-rem(10px);
         }
 
         label {
-          color: $subtext1;
-          font-size: 0.9em;
-          padding: 0 to-rem(4px);
+          font-weight: 500;
+          font-size: to-rem(14px);
+        }
+
+        .mute-button {
+          padding: to-rem(6px);
+          background-color: gtkalpha($surface1, 0.6);
+          border-radius: to-rem(18px);
+
+          &:hover {
+            background-color: gtkalpha($surface2, 0.5);
+          }
+
+          icon {
+            font-size: to-rem(18px);
+          }
+        }
+
+        .volume-slider {
+          margin: to-rem(8px) 0 to-rem(5px) 0;
+
+          trough {
+            background-color: gtkalpha($surface2, 0.5);
+            border-radius: to-rem(8px);
+            min-height: to-rem(8px);
+
+            highlight {
+              border-radius: to-rem(8px);
+              min-height: to-rem(8px);
+              background-color: $primary;
+            }
+          }
+
+          &.speaker-slider {
+            trough highlight {
+              background-color: $primary;
+            }
+
+            slider {
+              background-color: $primary;
+              border-radius: to-rem(9px);
+              min-height: to-rem(18px);
+              min-width: to-rem(18px);
+              margin: to-rem(-5px);
+            }
+          }
+
+          &.microphone-slider {
+            trough highlight {
+              background-color: $red;
+            }
+
+            slider {
+              background-color: $red;
+              border-radius: to-rem(9px);
+              min-height: to-rem(18px);
+              min-width: to-rem(18px);
+              margin: to-rem(-5px);
+            }
+          }
+        }
+
+        .volume-percentage {
+          color: $subtext0;
+          font-size: to-rem(14px);
+          font-weight: 500;
+          margin-left: to-rem(5px);
         }
       }
     }
 
-    .audio-outputs,
-    .microphone-inputs {
-      .device-selector {
-        padding: to-rem(8px);
-        border-radius: to-rem(8px);
-        background-color: transparent;
-        transition: all 200ms ease;
+    .section-header {
+      margin: to-rem(8px) 0;
 
-        &:hover {
-          background-color: gtkalpha($surface2, 0.8);
-        }
-
-        icon:last-child {
-          transition: all 200ms ease;
-          -gtk-icon-transform: rotate(-90deg);
-
-          &.expanded {
-            -gtk-icon-transform: rotate(0deg);
-          }
-        }
+      label {
+        font-size: to-rem(16px);
+        font-weight: 600;
+        color: $text;
       }
+    }
 
-      .device-list {
-        margin-left: to-rem(8px);
+    .device-controls {
+      margin-bottom: to-rem(16px);
 
-        button {
-          padding: to-rem(8px);
-          border-radius: to-rem(8px);
+      .devices-container {
+        background-color: gtkalpha($surface1, 0.5);
+        border-radius: to-rem(20px);
+        padding: to-rem(10px);
+
+        .device-selector {
+          padding: to-rem(10px);
+          border-radius: to-rem(16px);
           background-color: transparent;
           transition: all 200ms ease;
+          margin-bottom: to-rem(4px);
+          border: to-rem(1px) solid transparent;
 
           &:hover {
-            background-color: gtkalpha($surface2, 0.8);
+            background-color: gtkalpha($surface2, 0.5);
           }
 
-          &.active {
-            background-color: $primary;
+          box {
+            icon:first-child {
+              font-size: to-rem(18px);
+              color: $primary;
+              margin-right: to-rem(12px);
+            }
 
-            label,
-            icon {
-              color: $base;
+            label {
+              font-weight: 500;
+              font-size: to-rem(14px);
+            }
+          }
+
+          icon:last-child {
+            transition: all 250ms cubic-bezier(0.4, 0, 0.2, 1);
+            -gtk-icon-transform: rotate(-90deg);
+            opacity: 0.7;
+
+            &.expanded {
+              -gtk-icon-transform: rotate(0deg);
+              opacity: 1;
+            }
+          }
+        }
+
+        .device-list {
+          padding: to-rem(5px);
+          background-color: gtkalpha($surface1, 0.3);
+          border-radius: to-rem(12px);
+          margin: to-rem(5px);
+
+          button.device-item {
+            padding: to-rem(12px) to-rem(10px);
+            border-radius: to-rem(12px);
+            background-color: transparent;
+            transition: all 200ms ease;
+            margin: to-rem(2px) 0;
+            border: to-rem(1px) solid transparent;
+
+            &:hover {
+              background-color: gtkalpha($surface2, 0.5);
+            }
+
+            &.active {
+              background-color: gtkalpha($primary, 0.15);
+              border: to-rem(1px) solid gtkalpha($primary, 0.3);
+
+              icon {
+                color: $primary;
+              }
+            }
+
+            box {
+              icon {
+                font-size: to-rem(18px);
+                color: $primary;
+                opacity: 0.8;
+              }
+
+              label {
+                color: $text;
+                font-weight: 500;
+                font-size: to-rem(14px);
+                margin-left: to-rem(8px);
+              }
             }
           }
         }
@@ -104,9 +202,23 @@ window.AudioControlWindow {
     }
 
     .settings {
+      margin-top: to-rem(10px);
+
       button {
         @include button;
-        padding: to-rem(8px) to-rem(12px);
+        padding: to-rem(12px);
+        background-color: $primary;
+        border-radius: to-rem(20px);
+        font-weight: 500;
+        font-size: to-rem(14px);
+        color: $base;
+        border: none;
+        transition: all 200ms ease;
+
+        &:hover {
+          background-color: gtkalpha($primary, 0.8);
+          box-shadow: 0 to-rem(2px) to-rem(4px) gtkalpha(black, 0.2);
+        }
       }
     }
   }

@@ -28,8 +28,40 @@ local function create_volume_control(type)
 	local device_volume = Variable(device.volume * 100)
 	local device_mute = Variable(device.mute)
 
+	local icon_name = Variable.derive({ device_volume, device_mute }, function(vol, muted)
+		if muted then
+			if type == "speaker" then
+				return "audio-volume-muted-symbolic"
+			else
+				return "microphone-disabled-symbolic"
+			end
+		else
+			if type == "speaker" then
+				if vol <= 0 then
+					return "audio-volume-muted-symbolic"
+				elseif vol <= 33 then
+					return "audio-volume-low-symbolic"
+				elseif vol <= 66 then
+					return "audio-volume-medium-symbolic"
+				else
+					return "audio-volume-high-symbolic"
+				end
+			else
+				if vol <= 0 then
+					return "microphone-sensitivity-muted-symbolic"
+				elseif vol <= 33 then
+					return "microphone-sensitivity-low-symbolic"
+				elseif vol <= 66 then
+					return "microphone-sensitivity-medium-symbolic"
+				else
+					return "microphone-sensitivity-high-symbolic"
+				end
+			end
+		end
+	end)
+
 	local volume_scale = Widget.Slider({
-		class_name = "volume-slider",
+		class_name = "volume-slider " .. type .. "-slider",
 		draw_value = false,
 		hexpand = true,
 		width_request = 200,
@@ -56,8 +88,10 @@ local function create_volume_control(type)
 	})
 
 	return Widget.Box({
-		orientation = "HORIZONTAL",
-		spacing = 10,
+		class_name = type .. "-control",
+		orientation = "VERTICAL",
+		spacing = 8,
+		hexpand = true,
 		setup = function(self)
 			self:hook(device, "notify::volume", function()
 				if not _G.AUDIO_CONTROL_UPDATING then
@@ -74,31 +108,44 @@ local function create_volume_control(type)
 			self:hook(self, "destroy", function()
 				device_volume:drop()
 				device_mute:drop()
+				icon_name:drop()
 			end)
 		end,
-		Widget.Button({
-			class_name = "mute-button",
-			on_clicked = function()
-				if device then
-					device.mute = not device.mute
-				end
-			end,
-			child = Widget.Icon({
-				icon = bind(device_mute):as(function(muted)
-					if type == "speaker" then
-						return muted and "audio-volume-muted-symbolic" or "audio-volume-high-symbolic"
-					else
-						return muted and "microphone-disabled-symbolic" or "microphone-sensitivity-high-symbolic"
+		Widget.Box({
+			orientation = "HORIZONTAL",
+			spacing = 10,
+			hexpand = true,
+			Widget.Box({
+				orientation = "HORIZONTAL",
+				Widget.Icon({
+					class_name = type .. "-icon",
+					icon = icon_name(),
+				}),
+			}),
+			Widget.Label({
+				label = type == "speaker" and "Speaker" or "Microphone",
+				xalign = 0,
+				hexpand = true,
+			}),
+			Widget.Button({
+				class_name = "mute-button",
+				on_clicked = function()
+					if device then
+						device.mute = not device.mute
 					end
-				end),
+				end,
+				child = Widget.Icon({
+					icon = (device_mute() and "audio-volume-muted-symbolic" or "audio-volume-high-symbolic"),
+				}),
 			}),
 		}),
 		Widget.Box({
 			orientation = "HORIZONTAL",
-			spacing = 5,
+			spacing = 10,
 			hexpand = true,
 			volume_scale,
 			Widget.Label({
+				class_name = "volume-percentage",
 				label = bind(device_volume):as(function(vol)
 					return string.format("%d%%", math.floor(vol or 0))
 				end),
@@ -111,9 +158,10 @@ end
 
 local function VolumeControls()
 	return Widget.Box({
-		class_name = "volume-controls",
+		class_name = "volume-controls-container",
 		orientation = "VERTICAL",
 		spacing = 10,
+		hexpand = true,
 		create_volume_control("speaker"),
 		create_volume_control("microphone"),
 	})
@@ -125,12 +173,17 @@ local function create_device_list(devices, icon_name)
 		table.insert(
 			buttons,
 			Widget.Button({
+				class_name = "device-item",
+				hexpand = true,
 				child = Widget.Box({
 					orientation = "HORIZONTAL",
 					spacing = 10,
+					hexpand = true,
 					Widget.Icon({ icon = icon_name }),
 					Widget.Label({
 						label = device.description or "Unknown Device",
+						hexpand = true,
+						xalign = 0,
 					}),
 				}),
 				on_clicked = function()
@@ -142,117 +195,132 @@ local function create_device_list(devices, icon_name)
 	return buttons
 end
 
-local function AudioOutputs()
+local function DeviceLists()
 	local audio = Wp.get_default().audio
 	if not audio then
-		Debug.error("AudioControl", "Failed to get audio service for outputs")
+		Debug.error("AudioControl", "Failed to get audio service for devices")
 		return Widget.Box({})
 	end
 
-	local expanded_class = Variable.derive({ show_output_devices }, function(shown)
+	local expanded_output_class = Variable.derive({ show_output_devices }, function(shown)
+		return shown and "expanded" or ""
+	end)
+
+	local expanded_input_class = Variable.derive({ show_input_devices }, function(shown)
 		return shown and "expanded" or ""
 	end)
 
 	return Widget.Box({
-		class_name = "audio-outputs",
+		class_name = "device-controls",
 		orientation = "VERTICAL",
-		spacing = 5,
+		spacing = 15,
+		hexpand = true,
 		setup = function(self)
 			self:hook(self, "destroy", function()
-				expanded_class:drop()
+				expanded_output_class:drop()
+				expanded_input_class:drop()
 			end)
 		end,
-		Widget.Button({
-			class_name = "device-selector",
-			on_clicked = function()
-				show_output_devices:set(not show_output_devices:get())
-			end,
-			child = Widget.Box({
-				orientation = "HORIZONTAL",
-				spacing = 10,
-				Widget.Icon({ icon = "audio-speakers-symbolic" }),
-				Widget.Box({
+		Widget.Box({
+			class_name = "section-header",
+			orientation = "HORIZONTAL",
+			hexpand = true,
+			Widget.Label({
+				label = "Devices",
+				xalign = 0,
+				hexpand = true,
+			}),
+		}),
+		Widget.Box({
+			class_name = "devices-container",
+			orientation = "VERTICAL",
+			spacing = 10,
+			hexpand = true,
+			Widget.Button({
+				class_name = "device-selector",
+				hexpand = true,
+				on_clicked = function()
+					if show_input_devices:get() then
+						show_input_devices:set(false)
+					end
+					show_output_devices:set(not show_output_devices:get())
+				end,
+				child = Widget.Box({
+					orientation = "HORIZONTAL",
+					spacing = 10,
 					hexpand = true,
-					Widget.Label({
-						label = "Output",
-						xalign = 0,
+					Widget.Icon({ icon = "audio-speakers-symbolic" }),
+					Widget.Box({
+						hexpand = true,
+						Widget.Label({
+							label = "Audio Output",
+							xalign = 0,
+							hexpand = true,
+						}),
+					}),
+					Widget.Icon({
+						icon = "pan-down-symbolic",
+						class_name = expanded_output_class(),
 					}),
 				}),
-				Widget.Icon({
-					icon = "pan-down-symbolic",
-					class_name = expanded_class(),
+			}),
+			Widget.Revealer({
+				transition_duration = 200,
+				transition_type = "SLIDE_DOWN",
+				reveal_child = bind(show_output_devices),
+				hexpand = true,
+				child = Widget.Box({
+					orientation = "VERTICAL",
+					spacing = 5,
+					class_name = "device-list outputs-list",
+					hexpand = true,
+					bind(audio, "speakers"):as(function(speakers)
+						return create_device_list(speakers, "audio-speakers-symbolic")
+					end),
 				}),
 			}),
-		}),
-		Widget.Revealer({
-			transition_duration = 200,
-			transition_type = "SLIDE_DOWN",
-			reveal_child = bind(show_output_devices),
-			child = Widget.Box({
-				orientation = "VERTICAL",
-				spacing = 5,
-				class_name = "device-list",
-				bind(audio, "speakers"):as(function(speakers)
-					return create_device_list(speakers, "audio-speakers-symbolic")
-				end),
-			}),
-		}),
-	})
-end
-
-local function MicrophoneInputs()
-	local audio = Wp.get_default().audio
-	if not audio then
-		Debug.error("AudioControl", "Failed to get audio service for inputs")
-		return Widget.Box({})
-	end
-
-	local expanded_class = Variable.derive({ show_input_devices }, function(shown)
-		return shown and "expanded" or ""
-	end)
-
-	return Widget.Box({
-		class_name = "microphone-inputs",
-		orientation = "VERTICAL",
-		spacing = 5,
-		setup = function(self)
-			self:hook(self, "destroy", function()
-				expanded_class:drop()
-			end)
-		end,
-		Widget.Button({
-			class_name = "device-selector",
-			on_clicked = function()
-				show_input_devices:set(not show_input_devices:get())
-			end,
-			child = Widget.Box({
-				orientation = "HORIZONTAL",
-				spacing = 10,
-				Widget.Icon({ icon = "audio-input-microphone-symbolic" }),
-				Widget.Box({
+			Widget.Button({
+				class_name = "device-selector",
+				hexpand = true,
+				on_clicked = function()
+					if show_output_devices:get() then
+						show_output_devices:set(false)
+					end
+					show_input_devices:set(not show_input_devices:get())
+				end,
+				child = Widget.Box({
+					orientation = "HORIZONTAL",
+					spacing = 10,
 					hexpand = true,
-					Widget.Label({
-						label = "Input",
-						xalign = 0,
+					Widget.Icon({ icon = "audio-input-microphone-symbolic" }),
+					Widget.Box({
+						hexpand = true,
+						Widget.Label({
+							label = "Audio Input",
+							xalign = 0,
+							hexpand = true,
+						}),
+					}),
+					Widget.Icon({
+						icon = "pan-down-symbolic",
+						class_name = expanded_input_class(),
 					}),
 				}),
-				Widget.Icon({
-					icon = "pan-down-symbolic",
-					class_name = expanded_class(),
-				}),
 			}),
-		}),
-		Widget.Revealer({
-			transition_duration = 200,
-			transition_type = "SLIDE_DOWN",
-			reveal_child = bind(show_input_devices),
-			child = Widget.Box({
-				orientation = "VERTICAL",
-				spacing = 5,
-				class_name = "device-list",
-				bind(audio, "microphones"):as(function(microphones)
-					return create_device_list(microphones, "audio-input-microphone-symbolic")
-				end),
+			Widget.Revealer({
+				transition_duration = 200,
+				transition_type = "SLIDE_DOWN",
+				reveal_child = bind(show_input_devices),
+				hexpand = true,
+				child = Widget.Box({
+					orientation = "VERTICAL",
+					spacing = 5,
+					class_name = "device-list inputs-list",
+					hexpand = true,
+					bind(audio, "microphones"):as(function(microphones)
+						return create_device_list(microphones, "audio-input-microphone-symbolic")
+					end),
+				}),
 			}),
 		}),
 	})
@@ -261,8 +329,10 @@ end
 local function Settings(close_window)
 	return Widget.Box({
 		class_name = "settings",
+		hexpand = true,
 		Widget.Button({
 			label = "Sound Settings",
+			hexpand = true,
 			on_clicked = function()
 				if close_window then
 					close_window()
@@ -307,9 +377,9 @@ function AudioControlWindow.new(gdkmonitor)
 			orientation = "VERTICAL",
 			spacing = 15,
 			css = "padding: 15px;",
+			hexpand = true,
 			VolumeControls(),
-			AudioOutputs(),
-			MicrophoneInputs(),
+			DeviceLists(),
 			Settings(close_window),
 		}),
 	})

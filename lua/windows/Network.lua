@@ -45,50 +45,63 @@ local function connect_to_access_point(access_point)
 	astal.exec_async(string.format("nmcli device wifi connect %s", access_point.bssid))
 end
 
-local function AirplaneMode(airplane_mode)
-	return Widget.Box({
-		class_name = "airplane-mode",
-		orientation = "HORIZONTAL",
-		spacing = 10,
-		Widget.Label({
-			label = "Airplane Mode",
-			xalign = 0,
-			hexpand = true,
-		}),
-		Widget.Switch({
-			active = airplane_mode(),
-			on_state_set = function(_, state)
-				if state then
-					wifi.enabled = false
-				end
-				airplane_mode:set(state)
-				return true
-			end,
-		}),
-	})
-end
-
-local function WifiToggle(is_enabled)
+local function QuickSettings(airplane_mode, is_wifi_enabled)
 	local wifi_enabled = Variable.derive({ bind(wifi, "enabled") }, function(enabled)
 		return enabled
 	end)
 
 	return Widget.Box({
-		class_name = "wifi-toggle",
+		class_name = "quick-settings-row",
 		orientation = "HORIZONTAL",
 		spacing = 10,
-		Widget.Label({
-			label = "Wi-Fi",
-			xalign = 0,
+		hexpand = true,
+		Widget.Button({
+			class_name = Variable.derive({ airplane_mode }, function(enabled)
+				return enabled and "quick-toggle airplane-mode active" or "quick-toggle airplane-mode"
+			end)(),
 			hexpand = true,
-		}),
-		Widget.Switch({
-			active = wifi_enabled(),
-			on_state_set = function(_, state)
-				wifi.enabled = state
-				is_enabled:set(state)
-				return true
+			on_clicked = function()
+				local new_state = not airplane_mode:get()
+				if new_state then
+					wifi.enabled = false
+				end
+				airplane_mode:set(new_state)
 			end,
+			child = Widget.Box({
+				orientation = "VERTICAL",
+				spacing = 5,
+				hexpand = true,
+				Widget.Icon({
+					icon = "airplane-mode-symbolic",
+				}),
+				Widget.Label({
+					label = "Airplane",
+					xalign = 0.5,
+				}),
+			}),
+		}),
+		Widget.Button({
+			class_name = Variable.derive({ wifi_enabled }, function(enabled)
+				return enabled and "quick-toggle wifi active" or "quick-toggle wifi"
+			end)(),
+			hexpand = true,
+			on_clicked = function()
+				local new_state = not wifi_enabled:get()
+				wifi.enabled = new_state
+				is_wifi_enabled:set(new_state)
+			end,
+			child = Widget.Box({
+				orientation = "VERTICAL",
+				spacing = 5,
+				hexpand = true,
+				Widget.Icon({
+					icon = "network-wireless-symbolic",
+				}),
+				Widget.Label({
+					label = "Wi-Fi",
+					xalign = 0.5,
+				}),
+			}),
 		}),
 	})
 end
@@ -126,23 +139,28 @@ local function CurrentNetwork()
 		class_name = "current-network",
 		orientation = "VERTICAL",
 		spacing = 5,
+		hexpand = true,
 		Widget.Box({
 			orientation = "HORIZONTAL",
 			spacing = 10,
+			hexpand = true,
 			Widget.Icon({
 				icon = bind(wifi, "icon-name"),
 			}),
 			Widget.Label({
 				label = wifi_ssid(),
 				xalign = 0,
+				hexpand = true,
 			}),
 		}),
 		Widget.Box({
 			class_name = "network-details",
 			orientation = "VERTICAL",
 			spacing = 5,
+			hexpand = true,
 			Widget.Box({
 				orientation = "HORIZONTAL",
+				hexpand = true,
 				Widget.Label({ label = "Signal Strength:" }),
 				Widget.Label({
 					label = wifi_strength(),
@@ -152,6 +170,7 @@ local function CurrentNetwork()
 			}),
 			Widget.Box({
 				orientation = "HORIZONTAL",
+				hexpand = true,
 				Widget.Label({ label = "Frequency:" }),
 				Widget.Label({
 					label = wifi_frequency(),
@@ -161,6 +180,7 @@ local function CurrentNetwork()
 			}),
 			Widget.Box({
 				orientation = "HORIZONTAL",
+				hexpand = true,
 				Widget.Label({ label = "Bandwidth:" }),
 				Widget.Label({
 					label = wifi_bandwidth(),
@@ -172,7 +192,7 @@ local function CurrentNetwork()
 	})
 end
 
-local function VisibleNetworks(parent)
+local function VisibleNetworks()
 	local is_scanning = Variable(false)
 	local networks_ready = Variable(false)
 	local show_networks = Variable(false)
@@ -257,12 +277,14 @@ local function VisibleNetworks(parent)
 				buttons,
 				Widget.Button({
 					class_name = "network-item" .. (is_active and " active" or ""),
+					hexpand = true,
 					on_clicked = function()
 						connect_to_access_point(item)
 					end,
 					child = Widget.Box({
 						orientation = "HORIZONTAL",
 						spacing = 10,
+						hexpand = true,
 						Widget.Icon({ icon = item.icon_name or "network-wireless-symbolic" }),
 						Widget.Label({
 							label = item.ssid or "",
@@ -281,54 +303,83 @@ local function VisibleNetworks(parent)
 	end)
 
 	return Widget.Box({
-		class_name = "visible-networks",
+		class_name = "networks-section",
 		orientation = "VERTICAL",
-		spacing = 5,
-		Widget.Button({
-			class_name = "network-selector",
-			on_clicked = function()
-				show_networks:set(not show_networks:get())
-				if show_networks:get() then
-					start_scan()
-				else
-					is_scanning:set(false)
-					networks_ready:set(false)
-					cached_networks:set({})
-				end
-			end,
-			child = Widget.Box({
-				orientation = "HORIZONTAL",
-				spacing = 10,
-				Widget.Icon({ icon = "network-wireless-symbolic" }),
-				Widget.Box({
-					hexpand = true,
-					Widget.Label({
-						label = Variable.derive({ is_scanning }, function(scanning)
-							return scanning and "Scanning..." or "Available Networks"
-						end)(),
-						xalign = 0,
-					}),
-				}),
-				Widget.Icon({
-					icon = "pan-down-symbolic",
-					class_name = Variable.derive({ show_networks }, function(shown)
-						return shown and "expanded" or ""
-					end)(),
-				}),
+		spacing = 10,
+		hexpand = true,
+		Widget.Box({
+			class_name = "section-header",
+			orientation = "HORIZONTAL",
+			spacing = 5,
+			hexpand = true,
+			Widget.Label({
+				label = "Networks",
+				xalign = 0,
+				hexpand = true,
 			}),
 		}),
-		Widget.Revealer({
-			transition_duration = 200,
-			transition_type = "SLIDE_DOWN",
-			reveal_child = show_networks(),
-			child = Widget.Scrollable({
-				vscrollbar_policy = "AUTOMATIC",
-				hscrollbar_policy = "NEVER",
-				class_name = "network-list",
+		Widget.Box({
+			class_name = "networks-container",
+			orientation = "VERTICAL",
+			spacing = 5,
+			hexpand = true,
+			Widget.Button({
+				class_name = "network-selector",
+				hexpand = true,
+				on_clicked = function()
+					show_networks:set(not show_networks:get())
+					if show_networks:get() then
+						start_scan()
+					else
+						is_scanning:set(false)
+						networks_ready:set(false)
+						cached_networks:set({})
+					end
+				end,
 				child = Widget.Box({
+					orientation = "HORIZONTAL",
+					spacing = 10,
+					hexpand = true,
+					Widget.Icon({ icon = "network-wireless-symbolic" }),
+					Widget.Box({
+						hexpand = true,
+						Widget.Label({
+							label = Variable.derive({ is_scanning }, function(scanning)
+								return scanning and "Scanning..." or "Available Networks"
+							end)(),
+							xalign = 0,
+							hexpand = true,
+						}),
+					}),
+					Widget.Icon({
+						icon = "pan-down-symbolic",
+						class_name = Variable.derive({ show_networks }, function(shown)
+							return shown and "expanded" or ""
+						end)(),
+					}),
+				}),
+			}),
+			Widget.Revealer({
+				transition_duration = 200,
+				transition_type = "SLIDE_DOWN",
+				reveal_child = show_networks(),
+				hexpand = true,
+				child = Widget.Box({
+					class_name = "networks-list-container",
 					orientation = "VERTICAL",
-					spacing = 5,
-					networks_list(),
+					hexpand = true,
+					Widget.Scrollable({
+						vscrollbar_policy = "AUTOMATIC",
+						hscrollbar_policy = "NEVER",
+						class_name = "network-list",
+						hexpand = true,
+						child = Widget.Box({
+							orientation = "VERTICAL",
+							spacing = 5,
+							hexpand = true,
+							networks_list(),
+						}),
+					}),
 				}),
 			}),
 		}),
@@ -338,8 +389,10 @@ end
 local function Settings(close_window)
 	return Widget.Box({
 		class_name = "settings",
+		hexpand = true,
 		Widget.Button({
 			label = "Network Settings",
+			hexpand = true,
 			on_clicked = function()
 				if close_window then
 					close_window()
@@ -382,10 +435,10 @@ function NetworkWindow.new(gdkmonitor)
 				orientation = "VERTICAL",
 				spacing = 15,
 				css = "padding: 15px;",
-				AirplaneMode(airplane_mode),
-				WifiToggle(is_enabled),
+				hexpand = true,
+				QuickSettings(airplane_mode, is_enabled),
 				CurrentNetwork(),
-				VisibleNetworks(self),
+				VisibleNetworks(),
 				Settings(close_window),
 			}))
 		end,

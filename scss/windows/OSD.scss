@@ -5,6 +5,7 @@
 window.OSDWindow {
   @include unset;
   background: transparent;
+  box-shadow: none;
 }
 
 .OSD {

@@ -3,7 +3,7 @@ local Widget = require("astal.gtk3").Widget
 local Wp = astal.require("AstalWp")
 local bind = astal.bind
 local Debug = require("lua.lib.debug")
-local timeout = astal.timeout
+local GLib = astal.require("GLib")
 local Variable = require("astal.variable")
 
 local SHOW_TIMEOUT = 1500
@@ -12,10 +12,8 @@ local function create_volume_indicator(device, class_name)
 	return Widget.Box({
 		class_name = class_name,
 		visible = false,
-		css = "min-width: 200px; min-height: 30px;",
 		Widget.Box({
 			class_name = "indicator",
-			css = "min-width: 80px;",
 			Widget.Icon({
 				icon = bind(device, "volume-icon"),
 			}),
@@ -27,10 +25,10 @@ local function create_volume_indicator(device, class_name)
 		}),
 		Widget.Box({
 			class_name = "slider-container",
-			css = "min-width: 140px;",
 			Widget.Slider({
 				class_name = "volume-slider",
 				hexpand = true,
+				width_request = 150,
 				value = bind(device, "volume"),
 				on_dragged = function(slider)
 					device.volume = slider.value
@@ -44,18 +42,16 @@ local function create_mute_indicator(device, class_name)
 	return Widget.Box({
 		class_name = class_name .. "-mute",
 		visible = false,
-		css = "min-width: 200px; min-height: 30px;",
 		Widget.Icon({
 			icon = bind(device, "volume-icon"),
 		}),
 		Widget.Label({
 			label = "Muted",
-			css = "margin-left: 8px;",
 		}),
 	})
 end
 
-local function create_osd_widget(current_timeout_ref)
+local function create_osd_widget(current_timeout_ref, window_ref)
 	local speaker = Wp.get_default().audio.default_speaker
 	local mic = Wp.get_default().audio.default_microphone
 
@@ -71,6 +67,7 @@ local function create_osd_widget(current_timeout_ref)
 	return Widget.Box({
 		class_name = "OSD",
 		vertical = true,
+		css = "min-width: 300px; min-height: 50px;",
 		setup = function(self)
 			local speaker_vol = create_volume_indicator(speaker, "volume-indicator")
 			local speaker_mute = create_mute_indicator(speaker, "volume-indicator")
@@ -82,11 +79,31 @@ local function create_osd_widget(current_timeout_ref)
 			self:add(mic_vol)
 			self:add(mic_mute)
 
+			local current_visible_widget = nil
+
 			local function hide_all()
 				speaker_vol.visible = false
 				mic_vol.visible = false
 				speaker_mute.visible = false
 				mic_mute.visible = false
+				window_ref.visible = false
+				current_visible_widget = nil
+			end
+
+			hide_all()
+
+			local function update_visible_widget(widget)
+				if current_visible_widget == widget then
+					return
+				end
+
+				speaker_vol.visible = false
+				mic_vol.visible = false
+				speaker_mute.visible = false
+				mic_mute.visible = false
+
+				widget.visible = true
+				current_visible_widget = widget
 			end
 
 			local function show_osd(widget)
@@ -94,16 +111,23 @@ local function create_osd_widget(current_timeout_ref)
 					Debug.debug("OSD", "OSD update blocked: AUDIO_CONTROL_UPDATING is true")
 					return
 				end
-				hide_all()
-				widget.visible = true
 
-				if current_timeout_ref.timer then
-					current_timeout_ref.timer:cancel()
+				if not window_ref.visible then
+					window_ref.visible = true
+					update_visible_widget(widget)
+				else
+					update_visible_widget(widget)
 				end
 
-				current_timeout_ref.timer = timeout(SHOW_TIMEOUT, function()
-					widget.visible = false
-					current_timeout_ref.timer = nil
+				if current_timeout_ref.timer_id then
+					GLib.source_remove(current_timeout_ref.timer_id)
+					current_timeout_ref.timer_id = nil
+				end
+
+				current_timeout_ref.timer_id = GLib.timeout_add(GLib.PRIORITY_DEFAULT, SHOW_TIMEOUT, function()
+					hide_all()
+					current_timeout_ref.timer_id = nil
+					return GLib.SOURCE_REMOVE
 				end)
 			end
 
@@ -155,20 +179,24 @@ return function(gdkmonitor)
 		return nil
 	end
 
-	local current_timeout_ref = { timer = nil }
+	local current_timeout_ref = { timer_id = nil }
 	local Anchor = astal.require("Astal").WindowAnchor
 
-	return Widget.Window({
+	local window = Widget.Window({
 		class_name = "OSDWindow",
 		gdkmonitor = gdkmonitor,
 		anchor = Anchor.BOTTOM,
+		visible = false,
 		setup = function(self)
-			self:add(create_osd_widget(current_timeout_ref))
+			self:add(create_osd_widget(current_timeout_ref, self))
 		end,
 		on_destroy = function()
-			if current_timeout_ref.timer then
-				current_timeout_ref.timer = nil
+			if current_timeout_ref.timer_id then
+				GLib.source_remove(current_timeout_ref.timer_id)
+				current_timeout_ref.timer_id = nil
 			end
 		end,
 	})
+
+	return window
 end

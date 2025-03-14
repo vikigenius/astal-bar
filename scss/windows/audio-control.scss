@@ -1,5 +1,6 @@
 @use "../abstracts" as *;
 @use "../components/button" as *;
+@use "sass:color";
 
 window.AudioControlWindow {
   background: transparent;
@@ -48,17 +49,31 @@ window.AudioControlWindow {
         }
 
         .volume-slider {
-          margin: to-rem(8px) 0 to-rem(5px) 0;
+          margin: to-rem(12px) 0 to-rem(8px) 0;
+          padding: to-rem(4px) 0;
 
           trough {
             background-color: gtkalpha($surface2, 0.5);
-            border-radius: to-rem(8px);
-            min-height: to-rem(8px);
+            border-radius: to-rem(12px);
+            min-height: to-rem(10px);
+            transition: all 0.2s ease;
 
             highlight {
-              border-radius: to-rem(8px);
-              min-height: to-rem(8px);
+              border-radius: to-rem(20px);
+              min-height: to-rem(10px);
               background-color: $primary;
+              transition: all 0.2s ease;
+              padding: to-rem(6px) 0;
+            }
+          }
+
+          &:hover trough,
+          &:active trough {
+            background-color: gtkalpha($surface2, 0.7);
+            min-height: to-rem(14px);
+
+            highlight {
+              min-height: to-rem(14px);
             }
           }
 
@@ -67,27 +82,28 @@ window.AudioControlWindow {
               background-color: $primary;
             }
 
-            slider {
-              background-color: $primary;
-              border-radius: to-rem(9px);
-              min-height: to-rem(18px);
-              min-width: to-rem(18px);
-              margin: to-rem(-5px);
+            &:hover trough highlight,
+            &:active trough highlight {
+              background-color: color.scale($primary, $lightness: 15%);
+              box-shadow: 0 0 to-rem(6px) gtkalpha($primary, 0.4);
             }
           }
 
           &.microphone-slider {
             trough highlight {
-              background-color: $red;
+              background-color: transparent;
             }
+          }
+        }
 
-            slider {
-              background-color: $red;
-              border-radius: to-rem(9px);
-              min-height: to-rem(18px);
-              min-width: to-rem(18px);
-              margin: to-rem(-5px);
-            }
+        scale {
+          slider {
+            opacity: 0;
+            min-height: 0;
+            min-width: 0;
+            border: none;
+            background: transparent;
+            box-shadow: none;
           }
         }
 

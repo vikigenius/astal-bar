@@ -135,7 +135,13 @@ local function create_volume_control(type)
 					end
 				end,
 				child = Widget.Icon({
-					icon = (device_mute() and "audio-volume-muted-symbolic" or "audio-volume-high-symbolic"),
+					icon = (
+						device_mute()
+							and (type == "speaker" and "audio-volume-muted-symbolic" or "microphone-disabled-symbolic")
+						or (
+							type == "speaker" and "audio-volume-high-symbolic" or "microphone-sensitivity-high-symbolic"
+						)
+					),
 				}),
 			}),
 		}),

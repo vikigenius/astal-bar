@@ -1,9 +1,6 @@
 @use "sass:string";
+@use "sass:color";
 @use "../abstracts" as *;
-
-@function gtkalpha($c, $a) {
-  @return string.unquote("alpha(#{$c},#{$a})");
-}
 
 window.OSDWindow {
   @include unset;
@@ -12,63 +9,64 @@ window.OSDWindow {
 
 .OSD {
   background-color: gtkalpha($surface0, 0.95);
-  border-radius: 200px;
-  border: 1px solid gtkalpha($border, 0.2);
-  margin: 2rem 0;
+  border-radius: to-rem(24px);
+  border: to-rem(1px) solid gtkalpha($border, 0.15);
+  margin: to-rem(32px) 0;
+  box-shadow: 0 to-rem(4px) to-rem(20px) gtkalpha(black, 0.2);
+  padding: to-rem(5px);
 
   .volume-indicator,
   .volume-indicator-mute,
   .mic-indicator,
   .mic-indicator-mute {
-    padding: 0.75rem;
-    margin: 0.25rem;
+    padding: to-rem(14px) to-rem(18px);
+    margin: to-rem(4px);
 
     .indicator {
       icon {
-        margin-right: 0.5rem;
-        font-size: 20px;
-        color: $text;
+        margin-right: to-rem(12px);
+        font-size: to-rem(24px);
+        min-width: to-rem(24px);
+        min-height: to-rem(24px);
       }
 
       label {
         color: $text;
-        font-size: 1em;
+        font-size: to-rem(14px);
+        font-weight: 500;
       }
     }
 
     .slider-container {
       .volume-slider {
-        margin-left: 1rem;
-        margin-right: 1rem;
+        margin: 0 to-rem(16px);
+        min-width: to-rem(250px);
+        padding: to-rem(5px) 0;
 
         trough {
-          background-color: $surfaceVariant;
-          min-height: 1.2rem;
-          border-radius: 1rem;
-          margin-left: 0.5rem;
-        }
+          background-color: gtkalpha($surface2, 0.5);
+          min-height: to-rem(10px);
+          border-radius: to-rem(12px);
 
-        highlight {
-          background-color: $primary;
-          min-height: 0.8rem;
-          border-radius: 1rem;
-          margin: 0 -1em;
+          highlight {
+            border-radius: to-rem(12px);
+            min-height: to-rem(10px);
+            padding: to-rem(6px) 0;
+          }
         }
 
         slider {
-          background-color: $primary;
-          border-radius: 1rem;
-          min-height: 1.2rem;
-          min-width: 1.2rem;
-          margin: -0.2em;
+          opacity: 0;
+          min-height: 0;
+          min-width: 0;
+          border: none;
+          background: transparent;
+          box-shadow: none;
         }
+      }
 
-        & .muted {
-          highlight,
-          slider {
-            background-color: $onSurfaceVariant;
-          }
-        }
+      .muted highlight {
+        background-color: $onSurfaceVariant;
       }
     }
   }
@@ -77,11 +75,23 @@ window.OSDWindow {
     .indicator icon {
       color: $blue;
     }
+
+    .volume-slider {
+      trough highlight {
+        background-color: $blue;
+      }
+    }
   }
 
   .mic-indicator {
     .indicator icon {
       color: $red;
+    }
+
+    .volume-slider {
+      trough highlight {
+        background-color: $red;
+      }
     }
   }
 
@@ -97,8 +107,12 @@ window.OSDWindow {
       }
     }
 
-    scale trough highlight {
-      background-color: $overlay2;
+    .volume-slider trough {
+      background-color: gtkalpha($surface2, 0.3);
+
+      highlight {
+        background-color: $overlay2;
+      }
     }
   }
 }

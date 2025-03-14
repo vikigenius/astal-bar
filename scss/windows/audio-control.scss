@@ -91,7 +91,13 @@ window.AudioControlWindow {
 
           &.microphone-slider {
             trough highlight {
-              background-color: transparent;
+              background-color: $primary;
+            }
+
+            &:hover trough highlight,
+            &:active trough highlight {
+              background-color: color.scale($primary, $lightness: 15%);
+              box-shadow: 0 0 to-rem(6px) gtkalpha($primary, 0.4);
             }
           }
         }

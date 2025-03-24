@@ -21,6 +21,7 @@ local audio_window = nil
 local network_window = nil
 local battery_window = nil
 local display_control_window = nil
+local sysinfo_window = nil
 
 local function SysTray()
 	local tray = Tray.get_default()
@@ -296,6 +297,53 @@ local function BatteryLevel(monitor)
 	})
 end
 
+local function SysInfo(monitor)
+	local window_visible = Variable(false)
+	local user_vars = require("user-variables")
+	local profile_pic_path = user_vars.profile and user_vars.profile.picture or nil
+
+	local function toggle_sysinfo_window()
+		if window_visible:get() and sysinfo_window then
+			sysinfo_window:hide()
+			window_visible:set(false)
+		else
+			if not sysinfo_window then
+				local SysInfoWindow = require("lua.windows.SysInfo")
+				sysinfo_window = SysInfoWindow.new(monitor)
+			end
+			if sysinfo_window then
+				sysinfo_window:show_all()
+			end
+			window_visible:set(true)
+		end
+	end
+
+	local child
+	if profile_pic_path and require("lua.lib.common").file_exists(profile_pic_path) then
+		child = Widget.Box({
+			class_name = "profile-image",
+			css = string.format("background-image: url('%s');", profile_pic_path),
+			tooltip_text = "System Information",
+		})
+	else
+		child = Widget.Icon({
+			icon = "computer-symbolic",
+			tooltip_text = "System Information",
+		})
+	end
+
+	return Widget.Button({
+		class_name = "sysinfo-button",
+		on_clicked = toggle_sysinfo_window,
+		child = child,
+		setup = function(self)
+			self:hook(self, "destroy", function()
+				window_visible:drop()
+			end)
+		end,
+	})
+end
+
 return function(gdkmonitor)
 	if not gdkmonitor then
 		Debug.error("Bar", "No monitor available")
@@ -325,6 +373,9 @@ return function(gdkmonitor)
 			if display_control_window then
 				display_control_window:destroy()
 			end
+			if sysinfo_window then
+				sysinfo_window:destroy()
+			end
 		end,
 		Widget.CenterBox({
 			Widget.Box({
@@ -348,6 +399,7 @@ return function(gdkmonitor)
 				Wifi(gdkmonitor),
 				BatteryLevel(gdkmonitor),
 				Time("%A %d, %H:%M"),
+				SysInfo(gdkmonitor),
 			}),
 		}),
 	})

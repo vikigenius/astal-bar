@@ -20,6 +20,7 @@ local github_window = nil
 local audio_window = nil
 local network_window = nil
 local battery_window = nil
+local display_control_window = nil
 
 local function SysTray()
 	local tray = Tray.get_default()
@@ -169,6 +170,40 @@ local function AudioControl(monitor)
 	})
 end
 
+local function DisplayControl(monitor)
+	local window_visible = Variable(false)
+
+	local function toggle_display_window()
+		if window_visible:get() and display_control_window then
+			display_control_window:hide()
+			window_visible:set(false)
+		else
+			if not display_control_window then
+				local DisplayControlWindow = require("lua.windows.DisplayControl")
+				display_control_window = DisplayControlWindow.new(monitor)
+			end
+			if display_control_window then
+				display_control_window:show_all()
+			end
+			window_visible:set(true)
+		end
+	end
+
+	return Widget.Button({
+		class_name = "display-button",
+		on_clicked = toggle_display_window,
+		child = Widget.Icon({
+			icon = "video-display-symbolic",
+			tooltip_text = "Display Settings",
+		}),
+		setup = function(self)
+			self:hook(self, "destroy", function()
+				window_visible:drop()
+			end)
+		end,
+	})
+end
+
 local function Wifi(monitor)
 	local network = Network.get_default()
 	local window_visible = Variable(false)
@@ -287,6 +322,9 @@ return function(gdkmonitor)
 			if battery_window then
 				battery_window:destroy()
 			end
+			if display_control_window then
+				display_control_window:destroy()
+			end
 		end,
 		Widget.CenterBox({
 			Widget.Box({
@@ -306,6 +344,7 @@ return function(gdkmonitor)
 				-- Vitals(),
 				SysTray(),
 				AudioControl(gdkmonitor),
+				DisplayControl(gdkmonitor),
 				Wifi(gdkmonitor),
 				BatteryLevel(gdkmonitor),
 				Time("%A %d, %H:%M"),

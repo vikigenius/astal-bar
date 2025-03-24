@@ -38,6 +38,7 @@
           dart-sass
           inotify-tools
           brightnessctl
+          gammastep
           wget
           curl
         ])

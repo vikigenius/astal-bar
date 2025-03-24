@@ -20,4 +20,10 @@ return {
 	profile = {
 		picture = os.getenv("HOME") .. "/Downloads/pxArt(1).png",
 	},
+	media = {
+		preferred_players = {
+			"zen",
+			"firefox",
+		},
+	},
 }

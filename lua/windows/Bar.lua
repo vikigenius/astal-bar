@@ -22,6 +22,7 @@ local network_window = nil
 local battery_window = nil
 local display_control_window = nil
 local sysinfo_window = nil
+local media_window = nil
 
 local function SysTray()
 	local tray = Tray.get_default()
@@ -45,35 +46,146 @@ local function SysTray()
 	})
 end
 
-local function Media()
-	local player = Mpris.Player.new("zen")
-	local player_available = Variable.derive({ bind(player, "available") }, function(available)
-		return available
+local function Media(monitor)
+	local window_visible = Variable(false)
+	local is_visible = Variable(true)
+	local hover_state = Variable(false)
+
+	local user_vars = require("user-variables")
+	local preferred_players = user_vars.media and user_vars.media.preferred_players or {}
+
+	local mpris = Mpris.get_default()
+
+	local function get_active_player()
+		if not mpris then
+			Debug.error("Media", "MPRIS not available")
+			return nil
+		end
+
+		local players = mpris.players
+		if not players then
+			Debug.warning("Media", "No players available")
+			return nil
+		end
+
+		for _, preferred in ipairs(preferred_players) do
+			for _, player in ipairs(players) do
+				if player.bus_name:match(preferred) and player.available then
+					return player
+				end
+			end
+		end
+		return nil
+	end
+
+	local player_info = Variable({
+		title = nil,
+		cover = nil,
+		playing = false,
+		active = false,
+	}):poll(2000, function()
+		local result = {
+			title = nil,
+			cover = nil,
+			playing = false,
+			active = false,
+		}
+
+		local player = get_active_player()
+		if player and player.available then
+			result.active = true
+			pcall(function()
+				result.title = player.title
+			end)
+
+			pcall(function()
+				result.cover = player.cover_art or player.art_url
+			end)
+
+			pcall(function()
+				result.playing = (player.playback_status == "PLAYING")
+			end)
+		end
+
+		return result
 	end)
 
-	local player_metadata = Variable.derive({ bind(player, "metadata") }, function()
-		return string.format("%s - %s", player.title or "", player.artist or "")
-	end)
+	local function toggle_media_window()
+		if window_visible:get() and media_window then
+			media_window:hide()
+			window_visible:set(false)
+		else
+			if not media_window then
+				local MediaControlWindow = require("lua.windows.MediaControl")
+				media_window = MediaControlWindow.new(monitor)
+			end
+			if media_window then
+				media_window:show_all()
+			end
+			window_visible:set(true)
+		end
+	end
 
 	return Widget.Box({
-		class_name = "Media",
-		visible = bind(player_available),
-		Widget.Box({
-			class_name = "Cover",
-			valign = "CENTER",
-			css = bind(player, "cover-art"):as(function(cover)
-				return cover and "background-image: url('" .. cover .. "');" or ""
-			end),
-		}),
-		Widget.Label({
-			label = bind(player_metadata),
-		}),
+		class_name = "media-container",
+		visible = bind(player_info):as(function(info)
+			return info.active
+		end),
 		setup = function(self)
 			self:hook(self, "destroy", function()
-				player_available:drop()
-				player_metadata:drop()
+				player_info:drop()
+				is_visible:drop()
+				window_visible:drop()
+				hover_state:drop()
+				if media_window then
+					media_window:destroy()
+					media_window = nil
+				end
 			end)
 		end,
+		Widget.EventBox({
+			class_name = "media-clickable",
+			hexpand = true,
+			vexpand = true,
+			above_child = true,
+			on_button_press_event = toggle_media_window,
+			on_enter_notify_event = function()
+				hover_state:set(true)
+				return true
+			end,
+			on_leave_notify_event = function()
+				hover_state:set(false)
+				return true
+			end,
+			child = Widget.Box({
+				orientation = "HORIZONTAL",
+				spacing = 5,
+				Widget.Box({
+					class_name = "Cover",
+					width_request = 24,
+					height_request = 24,
+					valign = "CENTER",
+					css = bind(player_info):as(function(info)
+						if info.cover then
+							return string.format("background-image: url('%s'); background-size: cover;", info.cover)
+						end
+						return "background-color: #555555;"
+					end),
+				}),
+				Widget.Revealer({
+					transition_type = "SLIDE_RIGHT",
+					transition_duration = 250,
+					reveal_child = bind(hover_state),
+					child = Widget.Label({
+						label = bind(player_info):as(function(info)
+							return info.title or ""
+						end),
+						ellipsize = "END",
+						max_width_chars = 20,
+					}),
+				}),
+			}),
+		}),
 	})
 end
 
@@ -376,6 +488,9 @@ return function(gdkmonitor)
 			if sysinfo_window then
 				sysinfo_window:destroy()
 			end
+			if media_window then
+				media_window:destroy()
+			end
 		end,
 		Widget.CenterBox({
 			Widget.Box({
@@ -386,13 +501,12 @@ return function(gdkmonitor)
 			Widget.Box({
 				class_name = "center-box",
 				Workspaces(),
-				-- Media(),
+				Media(gdkmonitor),
 			}),
 			Widget.Box({
 				class_name = "right-box",
 				halign = "END",
 				GithubActivity(),
-				-- Vitals(),
 				SysTray(),
 				AudioControl(gdkmonitor),
 				DisplayControl(gdkmonitor),

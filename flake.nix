@@ -41,6 +41,7 @@
           gammastep
           wget
           curl
+          fastfetch
         ])
         ++ (with pkgs.lua52Packages; [
           cjson

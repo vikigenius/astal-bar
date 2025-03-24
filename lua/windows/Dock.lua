@@ -209,7 +209,6 @@ return function(gdkmonitor)
 
 		if visible then
 			visible:drop()
-			visible = nil
 		end
 
 		if detector_window then

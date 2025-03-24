@@ -45,7 +45,7 @@ eventbox.Notification {
     .app-name {
       margin-right: to-rem(5px);
       font-weight: bold;
-      color: $blue;
+      color: $overlay2;
 
       &:first-child {
         margin-left: to-rem(6px);
@@ -110,7 +110,7 @@ eventbox.Notification {
       transition: all 200ms ease;
 
       &:hover {
-        background-color: $primary;
+        background-color: $overlay2;
         color: $base;
       }
 

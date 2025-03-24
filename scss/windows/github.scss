@@ -17,7 +17,7 @@ window.GithubWindow {
 
       icon {
         font-size: to-rem(24px);
-        color: $primary;
+        color: $overlay2;
       }
 
       label {
@@ -36,7 +36,7 @@ window.GithubWindow {
       border: to-rem(1px) solid transparent;
 
       label {
-        color: $blue;
+        color: $overlay2;
         font-size: to-rem(13px);
         font-weight: 500;
       }
@@ -51,11 +51,11 @@ window.GithubWindow {
       }
 
       .refresh-button:hover {
-        background-color: gtkalpha($primary, 0.1);
+        background-color: gtkalpha($overlay2, 0.1);
       }
 
       .refresh-button icon {
-        color: $primary;
+        color: $overlay2;
         font-size: to-rem(16px);
       }
     }
@@ -71,7 +71,7 @@ window.GithubWindow {
         padding: to-rem(40px) 0;
 
         label {
-          color: $blue;
+          color: $overlay2;
           font-size: to-rem(14px);
         }
       }
@@ -113,7 +113,7 @@ window.GithubWindow {
         }
 
         .actor-name {
-          color: $primary;
+          color: $overlay2;
           font-weight: 600;
           font-size: to-rem(14px);
         }

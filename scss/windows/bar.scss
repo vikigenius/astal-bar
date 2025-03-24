@@ -6,25 +6,30 @@
 .Bar {
   @include unset($rec: true);
 
+  > centerbox {
+    background-color: $surface0;
+    padding: to-rem(4px) 0;
+  }
+
   .left-box {
     background-color: $surface0;
     border-radius: to-rem(20px);
-    padding: to-rem(10px) to-rem(16px);
-    margin: to-rem(20px) 0 0 to-rem(20px);
+    padding: to-rem(8px) to-rem(16px);
+    /* margin: to-rem(20px) 0 0 to-rem(20px); */
   }
 
   .center-box {
     background-color: $surface0;
     border-radius: to-rem(20px);
-    padding: to-rem(10px) to-rem(16px);
-    margin: to-rem(20px) 0 0 to-rem(20px);
+    padding: to-rem(8px) to-rem(16px);
+    /* margin: to-rem(20px) 0 0 to-rem(20px); */
   }
 
   .right-box {
     background-color: $surface0;
     border-radius: to-rem(20px);
-    padding: to-rem(10px) to-rem(16px);
-    margin: to-rem(20px) to-rem(20px) 0 0;
+    padding: to-rem(8px) to-rem(16px);
+    /* margin: to-rem(20px) to-rem(20px) 0 0; */
   }
 
   @include ActiveClient;

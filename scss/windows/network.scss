@@ -29,15 +29,15 @@ window.NetworkWindow {
         }
 
         &.active {
-          background-color: gtkalpha($primary, 0.15);
-          border-color: gtkalpha($primary, 0.3);
+          background-color: gtkalpha($overlay2, 0.15);
+          border-color: gtkalpha($overlay2, 0.3);
 
           icon {
-            color: $primary;
+            color: $overlay2;
           }
 
           label {
-            color: $primary;
+            color: $overlay2;
           }
         }
 
@@ -70,7 +70,7 @@ window.NetworkWindow {
 
         icon {
           font-size: to-rem(24px);
-          color: $primary;
+          color: $overlay2;
         }
 
         label {
@@ -131,7 +131,7 @@ window.NetworkWindow {
           box {
             icon:first-child {
               font-size: to-rem(18px);
-              color: $primary;
+              color: $overlay2;
               margin-right: to-rem(12px);
             }
 
@@ -184,18 +184,18 @@ window.NetworkWindow {
               }
 
               &.active {
-                background-color: gtkalpha($primary, 0.15);
-                border: to-rem(1px) solid gtkalpha($primary, 0.3);
+                background-color: gtkalpha($overlay2, 0.15);
+                border: to-rem(1px) solid gtkalpha($overlay2, 0.3);
 
                 icon {
-                  color: $primary;
+                  color: $overlay2;
                 }
               }
 
               box {
                 icon {
                   font-size: to-rem(18px);
-                  color: $primary;
+                  color: $overlay2;
                   opacity: 0.8;
                 }
 
@@ -206,7 +206,7 @@ window.NetworkWindow {
                 }
 
                 label:nth-child(3) {
-                  color: $blue;
+                  color: $overlay2;
                   font-size: to-rem(13px);
                   font-weight: 500;
                 }
@@ -223,7 +223,7 @@ window.NetworkWindow {
       button {
         @include button;
         padding: to-rem(12px);
-        background-color: $primary;
+        background-color: $overlay2;
         border-radius: to-rem(20px);
         font-weight: 500;
         font-size: to-rem(14px);
@@ -232,7 +232,7 @@ window.NetworkWindow {
         transition: all 200ms ease;
 
         &:hover {
-          background-color: gtkalpha($primary, 0.8);
+          background-color: gtkalpha($overlay2, 0.8);
           box-shadow: 0 to-rem(2px) to-rem(4px) gtkalpha(black, 0.2);
         }
       }

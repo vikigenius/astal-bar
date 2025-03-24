@@ -15,7 +15,7 @@ window.BatteryWindow {
 
       icon {
         font-size: to-rem(48px);
-        color: $primary;
+        color: $overlay2;
         margin-right: to-rem(16px);
       }
 
@@ -84,11 +84,11 @@ window.BatteryWindow {
           }
 
           &.active {
-            background-color: gtkalpha($primary, 0.15);
-            border-color: gtkalpha($primary, 0.3);
+            background-color: gtkalpha($overlay2, 0.15);
+            border-color: gtkalpha($overlay2, 0.3);
 
             label {
-              color: $primary;
+              color: $overlay2;
               font-weight: 600;
             }
           }
@@ -125,19 +125,19 @@ window.BatteryWindow {
         }
 
         &.active {
-          background-color: gtkalpha($primary, 0.15);
-          border-color: gtkalpha($primary, 0.3);
+          background-color: gtkalpha($overlay2, 0.15);
+          border-color: gtkalpha($overlay2, 0.3);
 
           icon:first-child {
-            color: $primary;
+            color: $overlay2;
           }
 
           box label:first-child {
-            color: $primary;
+            color: $overlay2;
           }
 
           icon:last-child {
-            color: $primary;
+            color: $overlay2;
           }
         }
 
@@ -170,14 +170,14 @@ window.BatteryWindow {
 
     .settings-section {
       .settings-button {
-        background-color: $primary;
+        background-color: $overlay2;
         border-radius: to-rem(20px);
         padding: to-rem(14px);
         transition: all 200ms ease;
         border: none;
 
         &:hover {
-          background-color: gtkalpha($primary, 0.8);
+          background-color: gtkalpha($overlay2, 0.8);
           box-shadow: 0 to-rem(2px) to-rem(4px) gtkalpha(black, 0.2);
         }
 

@@ -25,7 +25,7 @@ window.AudioControlWindow {
         .speaker-icon,
         .microphone-icon {
           font-size: to-rem(20px);
-          color: $primary;
+          color: $overlay2;
           margin-right: to-rem(10px);
         }
 
@@ -48,7 +48,7 @@ window.AudioControlWindow {
           }
         }
 
-        .volume-slider {
+        scale {
           margin: to-rem(12px) 0 to-rem(8px) 0;
           padding: to-rem(4px) 0;
 
@@ -59,11 +59,11 @@ window.AudioControlWindow {
             transition: all 0.2s ease;
 
             highlight {
-              border-radius: to-rem(20px);
+              border-radius: to-rem(12px);
               min-height: to-rem(10px);
-              background-color: $primary;
+              background-color: $overlay2;
+              background-image: none;
               transition: all 0.2s ease;
-              padding: to-rem(6px) 0;
             }
           }
 
@@ -74,35 +74,11 @@ window.AudioControlWindow {
 
             highlight {
               min-height: to-rem(14px);
+              background-color: color.scale($overlay2, $lightness: 15%);
+              box-shadow: 0 0 to-rem(6px) gtkalpha($overlay2, 0.4);
             }
           }
 
-          &.speaker-slider {
-            trough highlight {
-              background-color: $primary;
-            }
-
-            &:hover trough highlight,
-            &:active trough highlight {
-              background-color: color.scale($primary, $lightness: 15%);
-              box-shadow: 0 0 to-rem(6px) gtkalpha($primary, 0.4);
-            }
-          }
-
-          &.microphone-slider {
-            trough highlight {
-              background-color: $primary;
-            }
-
-            &:hover trough highlight,
-            &:active trough highlight {
-              background-color: color.scale($primary, $lightness: 15%);
-              box-shadow: 0 0 to-rem(6px) gtkalpha($primary, 0.4);
-            }
-          }
-        }
-
-        scale {
           slider {
             opacity: 0;
             min-height: 0;
@@ -155,7 +131,7 @@ window.AudioControlWindow {
           box {
             icon:first-child {
               font-size: to-rem(18px);
-              color: $primary;
+              color: $overlay2;
               margin-right: to-rem(12px);
             }
 
@@ -196,18 +172,18 @@ window.AudioControlWindow {
             }
 
             &.active {
-              background-color: gtkalpha($primary, 0.15);
-              border: to-rem(1px) solid gtkalpha($primary, 0.3);
+              background-color: gtkalpha($overlay2, 0.15);
+              border: to-rem(1px) solid gtkalpha($overlay2, 0.3);
 
               icon {
-                color: $primary;
+                color: $overlay2;
               }
             }
 
             box {
               icon {
                 font-size: to-rem(18px);
-                color: $primary;
+                color: $overlay2;
                 opacity: 0.8;
               }
 
@@ -229,7 +205,7 @@ window.AudioControlWindow {
       button {
         @include button;
         padding: to-rem(12px);
-        background-color: $primary;
+        background-color: $overlay2;
         border-radius: to-rem(20px);
         font-weight: 500;
         font-size: to-rem(14px);
@@ -238,8 +214,8 @@ window.AudioControlWindow {
         transition: all 200ms ease;
 
         &:hover {
-          background-color: gtkalpha($primary, 0.8);
-          box-shadow: 0 to-rem(2px) to-rem(4px) gtkalpha(black, 0.2);
+          background-color: gtkalpha($overlay2, 0.8);
+          box-shadow: 0 0 to-rem(2px) to-rem(4px) gtkalpha(black, 0.2);
         }
       }
     }

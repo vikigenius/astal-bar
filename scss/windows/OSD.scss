@@ -16,6 +16,38 @@ window.OSDWindow {
   box-shadow: 0 to-rem(4px) to-rem(20px) gtkalpha(black, 0.2);
   padding: to-rem(5px);
 
+  scale {
+    trough {
+      background-color: gtkalpha($surface2, 0.5);
+      min-height: to-rem(10px);
+      border-radius: to-rem(12px);
+
+      highlight {
+        background-color: $overlay2;
+        background-image: none;
+        border-radius: to-rem(12px);
+        min-height: to-rem(10px);
+      }
+    }
+
+    slider {
+      opacity: 0;
+      min-height: 0;
+      min-width: 0;
+      border: none;
+      background: transparent;
+      box-shadow: none;
+    }
+  }
+
+  .volume-indicator-mute,
+  .mic-indicator-mute {
+    padding-right: to-rem(8px);
+    icon {
+      padding-right: to-rem(8px);
+    }
+  }
+
   .volume-indicator,
   .volume-indicator-mute,
   .mic-indicator,
@@ -27,60 +59,25 @@ window.OSDWindow {
       icon {
         margin-right: to-rem(12px);
         font-size: to-rem(24px);
-        min-width: to-rem(24px);
-        min-height: to-rem(24px);
       }
 
       label {
         color: $text;
         font-size: to-rem(14px);
         font-weight: 500;
-      }
-    }
-
-    .slider-container {
-      .volume-slider {
-        margin: 0 to-rem(16px);
-        min-width: to-rem(250px);
-        padding: to-rem(5px) 0;
-
-        trough {
-          background-color: gtkalpha($surface2, 0.5);
-          min-height: to-rem(10px);
-          border-radius: to-rem(12px);
-
-          highlight {
-            border-radius: to-rem(12px);
-            min-height: to-rem(10px);
-            padding: to-rem(6px) 0;
-          }
-        }
-
-        slider {
-          opacity: 0;
-          min-height: 0;
-          min-width: 0;
-          border: none;
-          background: transparent;
-          box-shadow: none;
-        }
-      }
-
-      .muted highlight {
-        background-color: $onSurfaceVariant;
+        padding-right: to-rem(8px);
       }
     }
   }
 
   .volume-indicator {
     .indicator icon {
-      color: $blue;
+      color: $overlay2;
     }
 
-    .volume-slider {
-      trough highlight {
-        background-color: $blue;
-      }
+    scale trough highlight {
+      background-color: $overlay2;
+      background-image: none;
     }
   }
 
@@ -89,10 +86,9 @@ window.OSDWindow {
       color: $red;
     }
 
-    .volume-slider {
-      trough highlight {
-        background-color: $red;
-      }
+    scale trough highlight {
+      background-color: $red;
+      background-image: none;
     }
   }
 
@@ -108,11 +104,12 @@ window.OSDWindow {
       }
     }
 
-    .volume-slider trough {
+    scale trough {
       background-color: gtkalpha($surface2, 0.3);
 
       highlight {
         background-color: $overlay2;
+        background-image: none;
       }
     }
   }

@@ -52,31 +52,30 @@ local function Media(monitor)
 	local hover_state = Variable(false)
 	local is_destroyed = false
 	local hide_timer = nil
-	local player_info
+	local update_timer = nil
+	local player_info = Variable({
+		title = nil,
+		cover = nil,
+		playing = false,
+		active = false,
+	})
 
 	local user_vars = require("user-variables")
 	local preferred_players = user_vars.media and user_vars.media.preferred_players or {}
-
 	local mpris = Mpris.get_default()
 
 	local function safe_destroy_window()
 		if media_window then
 			local win = media_window
 			media_window = nil
-			GLib.idle_add(GLib.PRIORITY_DEFAULT, function()
-				if win then
-					win:destroy()
-				end
-				return false
-			end)
+			win:destroy()
 		end
 	end
 
 	local function get_active_player()
-		if not mpris then
+		if not mpris or is_destroyed then
 			return nil
 		end
-
 		local players = mpris.players
 		if not players then
 			return nil
@@ -92,63 +91,83 @@ local function Media(monitor)
 		return nil
 	end
 
-	player_info = Variable({
-		title = nil,
-		cover = nil,
-		playing = false,
-		active = false,
-	}):poll(2000, function()
-		if is_destroyed then
-			return nil
-		end
-
-		local result = {
+	local function hide_media()
+		player_info:set({
 			title = nil,
 			cover = nil,
 			playing = false,
 			active = false,
-		}
+		})
+		safe_destroy_window()
+	end
 
-		local player = get_active_player()
-		if player and player.available then
-			local is_playing = false
-			pcall(function()
-				is_playing = (player.playback_status == "PLAYING")
-			end)
-
-			result.active = true
-			pcall(function()
-				result.title = player.title
-			end)
-			pcall(function()
-				result.cover = player.cover_art or player.art_url
-			end)
-
-			if is_playing then
-				if hide_timer then
-					GLib.source_remove(hide_timer)
-					hide_timer = nil
-				end
-				result.playing = true
-			else
-				result.playing = false
-				if not hide_timer then
-					hide_timer = GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, MEDIA_HIDE_DELAY, function()
-						if not is_destroyed then
-							result.active = false
-							player_info:set(result)
-							safe_destroy_window()
-						end
-						hide_timer = nil
-						return false
-					end)
-				end
-			end
-		else
-			safe_destroy_window()
+	local function start_hide_timer()
+		if hide_timer then
+			GLib.source_remove(hide_timer)
+			hide_timer = nil
 		end
 
-		return result
+		hide_timer = GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, MEDIA_HIDE_DELAY, function()
+			if not is_destroyed then
+				hide_media()
+			end
+			hide_timer = nil
+			return false
+		end)
+	end
+
+	local function update_player_info()
+		if is_destroyed then
+			return
+		end
+
+		local player = get_active_player()
+		if not player or not player.available then
+			hide_media()
+			return
+		end
+
+		local is_playing = false
+		pcall(function()
+			is_playing = (player.playback_status == "PLAYING")
+		end)
+
+		if not is_playing then
+			if not hide_timer then
+				start_hide_timer()
+			end
+			return
+		end
+
+		local title = nil
+		pcall(function()
+			title = player.title
+		end)
+
+		local cover = nil
+		pcall(function()
+			cover = player.cover_art or player.art_url
+		end)
+
+		if hide_timer then
+			GLib.source_remove(hide_timer)
+			hide_timer = nil
+		end
+
+		player_info:set({
+			title = title,
+			cover = cover,
+			playing = true,
+			active = true,
+		})
+	end
+
+	update_timer = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 2000, function()
+		if is_destroyed then
+			return false
+		end
+		update_player_info()
+		return true
 	end)
 
 	local function toggle_media_window()
@@ -174,14 +193,19 @@ local function Media(monitor)
 	return Widget.Box({
 		class_name = "media-container",
 		visible = bind(player_info):as(function(info)
-			return info and info.active
+			return info and info.active and info.playing
 		end),
 		setup = function(self)
+			hide_media() -- Start hidden
 			self:hook(self, "destroy", function()
 				is_destroyed = true
 				if hide_timer then
 					GLib.source_remove(hide_timer)
 					hide_timer = nil
+				end
+				if update_timer then
+					GLib.source_remove(update_timer)
+					update_timer = nil
 				end
 				safe_destroy_window()
 				player_info:drop()

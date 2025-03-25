@@ -414,6 +414,8 @@ function NetworkWindow.new(gdkmonitor)
 	local Anchor = astal.require("Astal").WindowAnchor
 	local window
 	local is_closing = false
+	local cleanup_refs = {}
+	local is_destroyed = false
 
 	local function close_window()
 		if window and not is_closing then
@@ -423,20 +425,178 @@ function NetworkWindow.new(gdkmonitor)
 		end
 	end
 
+	cleanup_refs.wifi_ssid = Variable.derive({ bind(wifi, "ssid") }, function(ssid)
+		return ssid or "Not Connected"
+	end)
+
+	cleanup_refs.wifi_strength = Variable.derive({ bind(wifi, "strength") }, function(strength)
+		if not strength then
+			return "N/A"
+		end
+		if strength >= 80 then
+			return "Excellent"
+		end
+		if strength >= 60 then
+			return "Good"
+		end
+		if strength >= 40 then
+			return "Fair"
+		end
+		return "Weak"
+	end)
+
+	cleanup_refs.wifi_frequency = Variable.derive({ bind(wifi, "frequency") }, function(freq)
+		return freq and string.format("%.1f GHz", freq / 1000) or "N/A"
+	end)
+
+	cleanup_refs.wifi_bandwidth = Variable.derive({ bind(wifi, "bandwidth") }, function(bw)
+		return bw and string.format("%d Mbps", bw) or "N/A"
+	end)
+
+	cleanup_refs.is_scanning = Variable(false)
+	cleanup_refs.networks_ready = Variable(false)
+	cleanup_refs.show_networks = Variable(false)
+	cleanup_refs.cached_networks = Variable({})
+	cleanup_refs.airplane_mode = Variable(false)
+	cleanup_refs.is_enabled = Variable(wifi and wifi.enabled or false)
+
+	local function start_scan()
+		if wifi.enabled then
+			cleanup_refs.is_scanning:set(true)
+			cleanup_refs.networks_ready:set(false)
+			cleanup_refs.cached_networks:set({})
+
+			local scan_result = wifi:scan()
+			if not scan_result then
+				if not wifi or wifi.state == "ERROR" then
+					Debug.error(
+						"Network",
+						"Critical: Failed to initiate network scan - WiFi state: %s",
+						tostring(wifi and wifi.state or "unknown")
+					)
+				end
+			end
+
+			cleanup_refs.scan_timer = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 2000, function()
+				if is_destroyed then
+					return false
+				end
+				cleanup_refs.cached_networks:set(wifi.access_points or {})
+				cleanup_refs.is_scanning:set(false)
+				cleanup_refs.networks_ready:set(true)
+				cleanup_refs.scan_timer = nil
+				return false
+			end)
+		end
+	end
+
+	cleanup_refs.networks_list = Variable.derive(
+		{ cleanup_refs.networks_ready, cleanup_refs.cached_networks },
+		function(ready, networks)
+			if not wifi.enabled then
+				return {
+					Widget.Label({
+						label = "Wi-Fi is disabled",
+						xalign = 0.5,
+					}),
+				}
+			end
+
+			if not ready then
+				return {
+					Widget.Label({
+						label = "Scanning for networks...",
+						xalign = 0.5,
+					}),
+				}
+			end
+
+			local list = {}
+			if networks then
+				for _, ap in ipairs(networks) do
+					if ap and ap.ssid and ap.ssid ~= "" then
+						table.insert(list, ap)
+					end
+				end
+			end
+
+			list = remove_duplicates(list)
+			sort_by_priority(list)
+
+			if #list == 0 then
+				return {
+					Widget.Label({
+						label = "No networks found",
+						xalign = 0.5,
+					}),
+				}
+			end
+
+			local buttons = {}
+			for _, item in ipairs(list) do
+				local is_active = wifi.active_access_point and wifi.active_access_point.ssid == item.ssid
+
+				table.insert(
+					buttons,
+					Widget.Button({
+						class_name = "network-item" .. (is_active and " active" or ""),
+						hexpand = true,
+						on_clicked = function()
+							connect_to_access_point(item)
+						end,
+						child = Widget.Box({
+							orientation = "HORIZONTAL",
+							spacing = 10,
+							hexpand = true,
+							Widget.Icon({ icon = item.icon_name or "network-wireless-symbolic" }),
+							Widget.Label({
+								label = item.ssid or "",
+								xalign = 0,
+								hexpand = true,
+							}),
+							Widget.Label({
+								label = item.strength and string.format("%d%%", item.strength) or "N/A",
+								xalign = 1,
+							}),
+						}),
+					})
+				)
+			end
+			return buttons
+		end
+	)
+
 	window = Widget.Window({
 		class_name = "NetworkWindow",
 		gdkmonitor = gdkmonitor,
 		anchor = Anchor.TOP + Anchor.RIGHT,
 		setup = function(self)
-			local airplane_mode = Variable(false)
-			local is_enabled = Variable(wifi and wifi.enabled or false)
+			self:hook(self, "destroy", function()
+				if is_destroyed then
+					return
+				end
+				is_destroyed = true
+
+				if cleanup_refs.scan_timer then
+					GLib.source_remove(cleanup_refs.scan_timer)
+				end
+
+				for _, ref in pairs(cleanup_refs) do
+					if type(ref) == "table" and ref.drop then
+						ref:drop()
+					end
+				end
+
+				cleanup_refs = nil
+				collectgarbage("collect")
+			end)
 
 			self:add(Widget.Box({
 				orientation = "VERTICAL",
 				spacing = 15,
 				css = "padding: 15px;",
 				hexpand = true,
-				QuickSettings(airplane_mode, is_enabled),
+				QuickSettings(cleanup_refs.airplane_mode, cleanup_refs.is_enabled),
 				CurrentNetwork(),
 				VisibleNetworks(),
 				Settings(close_window),

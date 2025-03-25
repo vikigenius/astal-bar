@@ -184,22 +184,105 @@ local GithubWindow = {}
 
 function GithubWindow.new(gdkmonitor)
 	local Anchor = astal.require("Astal").WindowAnchor
+	local cleanup_refs = {}
+	local is_destroyed = false
 	local window
-	local is_closing = false
-	local update_events_func
 	local first_map = true
 
 	local function close_window()
-		if window and not is_closing then
-			is_closing = true
+		if window and not is_destroyed then
 			window:hide()
-			is_closing = false
 		end
 	end
 
-	local events_var, last_update_var, is_loading_var, update_label_visible, load_events, update_events, cleanup_timer =
-		create_events_handler()
-	update_events_func = update_events
+	cleanup_refs.events_var = Variable.new({ loading = true })
+	cleanup_refs.last_update_var = Variable.new("")
+	cleanup_refs.is_loading_var = Variable.new(true)
+	cleanup_refs.update_label_visible = Variable.new(false)
+
+	local function process_events(github_events)
+		if not github_events then
+			return { error = true }
+		end
+		if #github_events == 0 then
+			return { empty = true }
+		end
+		return map(github_events, function(event)
+			return {
+				type = format_event_type(event.type),
+				actor = event.actor.login,
+				repo = format_repo_name(event.repo),
+				time = Github.format_time(event.created_at),
+				avatar_url = event.actor.avatar_url,
+				url = "https://github.com/" .. event.repo.name,
+			}
+		end)
+	end
+
+	local function start_update_timer()
+		if cleanup_refs.update_timer_id then
+			GLib.source_remove(cleanup_refs.update_timer_id)
+		end
+
+		cleanup_refs.update_timer_id = GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, 60, function()
+			if is_destroyed then
+				return false
+			end
+			local timestamp = Github.get_last_update_time()
+			if timestamp and timestamp > 0 and cleanup_refs.update_label_visible:get() then
+				cleanup_refs.last_update_var:set(Github.format_last_update(timestamp))
+			end
+			return true
+		end)
+	end
+
+	local function load_events()
+		if is_destroyed then
+			return
+		end
+
+		GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, function()
+			if is_destroyed then
+				return false
+			end
+
+			local events, timestamp = Github.get_events()
+			cleanup_refs.events_var:set(process_events(events))
+
+			if timestamp and timestamp > 0 then
+				cleanup_refs.last_update_var:set(Github.format_last_update(timestamp))
+			else
+				cleanup_refs.last_update_var:set("Updated just now")
+			end
+
+			cleanup_refs.update_label_visible:set(true)
+			cleanup_refs.is_loading_var:set(false)
+			start_update_timer()
+			return false
+		end)
+	end
+
+	local function update_events()
+		if is_destroyed then
+			return
+		end
+
+		cleanup_refs.is_loading_var:set(true)
+		cleanup_refs.events_var:set({ loading = true })
+		cleanup_refs.last_update_var:set("Updating...")
+
+		GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, function()
+			if is_destroyed then
+				return false
+			end
+
+			local events, timestamp = Github.update_events()
+			cleanup_refs.events_var:set(process_events(events))
+			cleanup_refs.last_update_var:set(Github.format_last_update(timestamp))
+			cleanup_refs.is_loading_var:set(false)
+			return false
+		end)
+	end
 
 	load_events()
 
@@ -223,9 +306,9 @@ function GithubWindow.new(gdkmonitor)
 			class_name = "update-bar",
 			orientation = "HORIZONTAL",
 			spacing = 8,
-			visible = bind(update_label_visible),
+			visible = bind(cleanup_refs.update_label_visible),
 			Widget.Label({
-				label = bind(last_update_var),
+				label = bind(cleanup_refs.last_update_var),
 				xalign = 0,
 				hexpand = true,
 			}),
@@ -235,11 +318,8 @@ function GithubWindow.new(gdkmonitor)
 					icon = "view-refresh-symbolic",
 				}),
 				on_clicked = function()
-					if not is_loading_var:get() then
-						Debug.debug("GitHub", "Refresh button clicked")
+					if not cleanup_refs.is_loading_var:get() then
 						update_events()
-					else
-						Debug.debug("GitHub", "Refresh button clicked but loading is in progress")
 					end
 				end,
 			}),
@@ -248,7 +328,7 @@ function GithubWindow.new(gdkmonitor)
 			vexpand = true,
 			hexpand = true,
 			class_name = "github-feed-container",
-			child = bind(events_var):as(function(evt)
+			child = bind(cleanup_refs.events_var):as(function(evt)
 				if evt.error then
 					return ErrorIndicator()
 				end
@@ -269,21 +349,6 @@ function GithubWindow.new(gdkmonitor)
 				})
 			end),
 		}),
-		setup = function(self)
-			if Github and type(Github.mark_viewed) == "function" then
-				Github.mark_viewed()
-			end
-
-			self:hook(self, "destroy", function()
-				events_var:drop()
-				last_update_var:drop()
-				is_loading_var:drop()
-				update_label_visible:drop()
-				if cleanup_timer then
-					cleanup_timer()
-				end
-			end)
-		end,
 	})
 
 	window = Widget.Window({
@@ -294,6 +359,26 @@ function GithubWindow.new(gdkmonitor)
 		height_request = 400,
 		child = content,
 		setup = function(self)
+			self:hook(self, "destroy", function()
+				if is_destroyed then
+					return
+				end
+				is_destroyed = true
+
+				if cleanup_refs.update_timer_id then
+					GLib.source_remove(cleanup_refs.update_timer_id)
+				end
+
+				for _, ref in pairs(cleanup_refs) do
+					if type(ref) == "table" and ref.drop then
+						ref:drop()
+					end
+				end
+
+				cleanup_refs = nil
+				collectgarbage("collect")
+			end)
+
 			self:hook(self, "map", function()
 				if first_map then
 					first_map = false
@@ -308,10 +393,10 @@ function GithubWindow.new(gdkmonitor)
 						needs_update = (last_update == 0 or (current_time - last_update > 1800))
 					end
 
-					if needs_update then
+					if needs_update and not is_destroyed then
 						GLib.timeout_add(GLib.PRIORITY_DEFAULT, 1000, function()
-							if not is_closing and update_events_func then
-								update_events_func()
+							if not is_destroyed then
+								update_events()
 							end
 							return false
 						end)

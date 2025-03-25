@@ -51,7 +51,7 @@ local function create_mute_indicator(device, class_name)
 	})
 end
 
-local function create_osd_widget(current_timeout_ref, window_ref)
+local function create_osd_widget(cleanup_refs, window_ref)
 	local speaker = Wp.get_default().audio.default_speaker
 	local mic = Wp.get_default().audio.default_microphone
 
@@ -69,6 +69,7 @@ local function create_osd_widget(current_timeout_ref, window_ref)
 		vertical = true,
 		css = "min-width: 300px; min-height: 50px;",
 		setup = function(self)
+			local is_destroyed = false
 			local speaker_vol = create_volume_indicator(speaker, "volume-indicator")
 			local speaker_mute = create_mute_indicator(speaker, "volume-indicator")
 			local mic_vol = create_volume_indicator(mic, "mic-indicator")
@@ -82,6 +83,9 @@ local function create_osd_widget(current_timeout_ref, window_ref)
 			local current_visible_widget = nil
 
 			local function hide_all()
+				if is_destroyed then
+					return
+				end
 				speaker_vol.visible = false
 				mic_vol.visible = false
 				speaker_mute.visible = false
@@ -93,7 +97,7 @@ local function create_osd_widget(current_timeout_ref, window_ref)
 			hide_all()
 
 			local function update_visible_widget(widget)
-				if current_visible_widget == widget then
+				if is_destroyed or current_visible_widget == widget then
 					return
 				end
 
@@ -107,8 +111,7 @@ local function create_osd_widget(current_timeout_ref, window_ref)
 			end
 
 			local function show_osd(widget)
-				if _G.AUDIO_CONTROL_UPDATING then
-					Debug.debug("OSD", "OSD update blocked: AUDIO_CONTROL_UPDATING is true")
+				if is_destroyed or _G.AUDIO_CONTROL_UPDATING then
 					return
 				end
 
@@ -119,55 +122,67 @@ local function create_osd_widget(current_timeout_ref, window_ref)
 					update_visible_widget(widget)
 				end
 
-				if current_timeout_ref.timer_id then
-					GLib.source_remove(current_timeout_ref.timer_id)
-					current_timeout_ref.timer_id = nil
+				if cleanup_refs.timer_id then
+					GLib.source_remove(cleanup_refs.timer_id)
+					cleanup_refs.timer_id = nil
 				end
 
-				current_timeout_ref.timer_id = GLib.timeout_add(GLib.PRIORITY_DEFAULT, SHOW_TIMEOUT, function()
-					hide_all()
-					current_timeout_ref.timer_id = nil
+				cleanup_refs.timer_id = GLib.timeout_add(GLib.PRIORITY_DEFAULT, SHOW_TIMEOUT, function()
+					if not is_destroyed then
+						hide_all()
+					end
+					cleanup_refs.timer_id = nil
 					return GLib.SOURCE_REMOVE
 				end)
 			end
 
-			local speaker_volume_var = Variable.derive({ bind(speaker, "volume") }, function(vol)
+			cleanup_refs.speaker_volume = Variable.derive({ bind(speaker, "volume") }, function(vol)
 				return vol
 			end)
 
-			local speaker_mute_var = Variable.derive({ bind(speaker, "mute") }, function(muted)
+			cleanup_refs.speaker_mute = Variable.derive({ bind(speaker, "mute") }, function(muted)
 				return muted
 			end)
 
-			local mic_volume_var = Variable.derive({ bind(mic, "volume") }, function(vol)
+			cleanup_refs.mic_volume = Variable.derive({ bind(mic, "volume") }, function(vol)
 				return vol
 			end)
 
-			local mic_mute_var = Variable.derive({ bind(mic, "mute") }, function(muted)
+			cleanup_refs.mic_mute = Variable.derive({ bind(mic, "mute") }, function(muted)
 				return muted
 			end)
 
-			speaker_volume_var:subscribe(function()
+			cleanup_refs.speaker_volume:subscribe(function()
 				show_osd(speaker_vol)
 			end)
 
-			speaker_mute_var:subscribe(function(muted)
+			cleanup_refs.speaker_mute:subscribe(function(muted)
 				show_osd(muted and speaker_mute or speaker_vol)
 			end)
 
-			mic_volume_var:subscribe(function()
+			cleanup_refs.mic_volume:subscribe(function()
 				show_osd(mic_vol)
 			end)
 
-			mic_mute_var:subscribe(function(muted)
+			cleanup_refs.mic_mute:subscribe(function(muted)
 				show_osd(muted and mic_mute or mic_vol)
 			end)
 
 			self:hook(self, "destroy", function()
-				speaker_volume_var:drop()
-				speaker_mute_var:drop()
-				mic_volume_var:drop()
-				mic_mute_var:drop()
+				is_destroyed = true
+
+				if cleanup_refs.speaker_volume then
+					cleanup_refs.speaker_volume:drop()
+				end
+				if cleanup_refs.speaker_mute then
+					cleanup_refs.speaker_mute:drop()
+				end
+				if cleanup_refs.mic_volume then
+					cleanup_refs.mic_volume:drop()
+				end
+				if cleanup_refs.mic_mute then
+					cleanup_refs.mic_mute:drop()
+				end
 			end)
 		end,
 	})
@@ -179,7 +194,8 @@ return function(gdkmonitor)
 		return nil
 	end
 
-	local current_timeout_ref = { timer_id = nil }
+	local cleanup_refs = {}
+	local is_destroyed = false
 	local Anchor = astal.require("Astal").WindowAnchor
 
 	local window = Widget.Window({
@@ -188,13 +204,29 @@ return function(gdkmonitor)
 		anchor = Anchor.BOTTOM,
 		visible = false,
 		setup = function(self)
-			self:add(create_osd_widget(current_timeout_ref, self))
+			self:add(create_osd_widget(cleanup_refs, self))
 		end,
 		on_destroy = function()
-			if current_timeout_ref.timer_id then
-				GLib.source_remove(current_timeout_ref.timer_id)
-				current_timeout_ref.timer_id = nil
+			if is_destroyed then
+				return
 			end
+			is_destroyed = true
+
+			if cleanup_refs.timer_id then
+				GLib.source_remove(cleanup_refs.timer_id)
+			end
+
+			for key, ref in pairs(cleanup_refs) do
+				if type(ref) == "table" and ref.drop then
+					ref:drop()
+				elseif type(ref) == "number" then
+					GLib.source_remove(ref)
+				end
+				cleanup_refs[key] = nil
+			end
+
+			cleanup_refs = nil
+			collectgarbage("collect")
 		end,
 	})
 

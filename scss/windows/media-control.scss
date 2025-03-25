@@ -18,20 +18,20 @@ window.MediaControlWindow {
     }
 
     .media-info {
-      padding: to-rem(8px) 0;
+      /* padding: to-rem(8px) 0; */
 
       .media-title {
         font-size: to-rem(24px);
         font-weight: 600;
         color: $overlay2;
-        margin-bottom: to-rem(4px);
+        /* margin-bottom: to-rem(4px); */
       }
 
       .media-artist {
         font-size: to-rem(16px);
         font-weight: 500;
         color: $text;
-        margin-bottom: to-rem(4px);
+        /* margin-bottom: to-rem(4px); */
       }
 
       .media-album {

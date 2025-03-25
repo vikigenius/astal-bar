@@ -60,80 +60,26 @@ local function formatTime(seconds)
 	end
 end
 
-local function MainInfo(on_destroy_ref)
-	local bat = getBatteryDevice()
-	if not bat then
-		Debug.error("Battery", "Cannot create MainInfo: no battery device")
-		return Widget.Box({})
-	end
-
-	local time_info = Variable.derive({ bind(bat, "state") }, function(state)
-		if not state then
-			Debug.error("Battery", "Failed to get battery state")
-			return "Unknown"
-		end
-
-		if state == "PENDING_CHARGE" and getConservationMode() then
-			return "Conservation mode enabled, waiting to charge"
-		end
-
-		if state == "CHARGING" or state == "DISCHARGING" then
-			local time = state == "CHARGING" and bat:get_time_to_full() or bat:get_time_to_empty()
-			if not time then
-				Debug.error("Battery", "Failed to get battery time estimation")
-				return "Calculating..."
-			end
-			if time > 0 then
-				return formatTime(time)
-			end
-			return "Calculating..."
-		end
-		return tostring(state)
-	end)
-
-	on_destroy_ref.time_info = time_info
-
-	return Widget.Box({
-		class_name = "battery-main-info",
-		hexpand = true,
-		Widget.Box({
-			orientation = "HORIZONTAL",
-			spacing = 10,
-			hexpand = true,
-			Widget.Icon({
-				icon = bind(bat, "battery-icon-name"),
-				css = "font-size: 48px;",
-			}),
-			Widget.Box({
-				orientation = "VERTICAL",
-				hexpand = true,
-				Widget.Label({
-					label = bind(bat, "percentage"):as(function(p)
-						if not p then
-							Debug.error("Battery", "Failed to get battery percentage")
-							return "Battery N/A"
-						end
-						return string.format("Battery %.0f%%", p * 100)
-					end),
-					xalign = 0,
-					css = "font-size: 18px; font-weight: bold;",
-				}),
-				Widget.Label({
-					label = bind(time_info),
-					xalign = 0,
-					css = "font-size: 14px;",
-				}),
-			}),
-		}),
-	})
-end
-
-local function BatteryInfo()
+local function BatteryInfo(cleanup_refs)
 	local bat = getBatteryDevice()
 	if not bat then
 		Debug.error("Battery", "Cannot create BatteryInfo: no battery device")
 		return Widget.Box({})
 	end
+
+	cleanup_refs.battery_state = Variable.derive({ bind(bat, "state") }, function(state)
+		if not state then
+			return "Unknown"
+		end
+		return state:gsub("^%l", string.upper):gsub("-", " ")
+	end)
+
+	cleanup_refs.battery_capacity = Variable.derive({ bind(bat, "capacity") }, function(capacity)
+		if not capacity then
+			return "N/A"
+		end
+		return string.format("%.1f%%", capacity * 100)
+	end)
 
 	return Widget.Box({
 		class_name = "battery-details",
@@ -145,13 +91,7 @@ local function BatteryInfo()
 			hexpand = true,
 			Widget.Label({ label = "Status:" }),
 			Widget.Label({
-				label = bind(bat, "state"):as(function(state)
-					if not state then
-						Debug.error("Battery", "Failed to get battery state")
-						return "Unknown"
-					end
-					return state:gsub("^%l", string.upper):gsub("-", " ")
-				end),
+				label = bind(cleanup_refs.battery_state),
 				xalign = 1,
 				hexpand = true,
 			}),
@@ -161,13 +101,7 @@ local function BatteryInfo()
 			hexpand = true,
 			Widget.Label({ label = "Health:" }),
 			Widget.Label({
-				label = bind(bat, "capacity"):as(function(capacity)
-					if not capacity then
-						Debug.error("Battery", "Failed to get battery capacity")
-						return "N/A"
-					end
-					return string.format("%.1f%%", capacity * 100)
-				end),
+				label = bind(cleanup_refs.battery_capacity),
 				xalign = 1,
 				hexpand = true,
 			}),
@@ -295,15 +229,16 @@ local function PowerProfile(on_destroy_ref)
 
 	local bat = getBatteryDevice()
 	local auto_profile = Variable.derive({ bind(bat, "state") }, function(state)
-		if not bat or not power then
-			return
+		if not state or not power or not power.active_profile then
+			return nil
 		end
-		if state == "CHARGING" then
+
+		if state == "CHARGING" and power.active_profile ~= "performance" then
 			power.active_profile = "performance"
-		elseif state == "DISCHARGING" then
+		elseif state == "DISCHARGING" and power.active_profile ~= "balanced" then
 			power.active_profile = "balanced"
 		end
-		return state
+		return power.active_profile
 	end)
 
 	on_destroy_ref.auto_profile = auto_profile
@@ -436,50 +371,143 @@ function BatteryWindow.new(gdkmonitor)
 
 	local Anchor = astal.require("Astal").WindowAnchor
 	local window
-	local on_destroy_ref = {}
+	local cleanup_refs = {}
+	local is_destroyed = false
 	local is_closing = false
 
 	local function close_window()
-		if window and not is_closing then
+		if window and not is_closing and not is_destroyed then
 			is_closing = true
 			window:hide()
 			is_closing = false
 		end
 	end
 
+	local bat = getBatteryDevice()
+	if not bat then
+		Debug.error("Battery", "Cannot initialize: no battery device")
+		return nil
+	end
+
+	cleanup_refs.time_info = Variable.derive({ bind(bat, "state") }, function(state)
+		if not state then
+			return "Unknown"
+		end
+
+		if state == "PENDING_CHARGE" and getConservationMode() then
+			return "Conservation mode enabled, waiting to charge"
+		end
+
+		if state == "CHARGING" or state == "DISCHARGING" then
+			local time = state == "CHARGING" and bat:get_time_to_full() or bat:get_time_to_empty()
+			if not time then
+				return "Calculating..."
+			end
+			if time > 0 then
+				return formatTime(time)
+			end
+			return "Calculating..."
+		end
+		return tostring(state)
+	end)
+
+	local power = PowerProfiles.get_default()
+	cleanup_refs.profile_var = Variable.derive({ bind(power, "active-profile") }, function(profile)
+		return profile
+	end)
+
+	cleanup_refs.auto_profile = Variable.derive({ bind(bat, "state") }, function(state)
+		if not bat or not power then
+			return
+		end
+		if state == "CHARGING" then
+			power.active_profile = "performance"
+		elseif state == "DISCHARGING" then
+			power.active_profile = "balanced"
+		end
+		return state
+	end)
+
+	cleanup_refs.conservation_var = Variable(getConservationMode())
+
 	window = Widget.Window({
 		class_name = "BatteryWindow",
 		gdkmonitor = gdkmonitor,
 		anchor = Anchor.TOP + Anchor.RIGHT,
+		setup = function(self)
+			self:hook(self, "destroy", function()
+				if is_destroyed then
+					return
+				end
+				is_destroyed = true
+
+				for _, ref in pairs(cleanup_refs) do
+					if type(ref) == "table" and ref.drop then
+						ref:drop()
+					end
+				end
+
+				cleanup_refs = nil
+				collectgarbage("collect")
+			end)
+		end,
 		child = Widget.Box({
 			orientation = "VERTICAL",
 			spacing = 15,
 			css = "padding: 18px;",
 			hexpand = true,
-			MainInfo(on_destroy_ref),
+			Widget.Box({
+				class_name = "battery-main-info",
+				hexpand = true,
+				Widget.Box({
+					orientation = "HORIZONTAL",
+					spacing = 10,
+					hexpand = true,
+					Widget.Icon({
+						icon = bind(bat, "battery-icon-name"),
+						css = "font-size: 48px;",
+					}),
+					Widget.Box({
+						orientation = "VERTICAL",
+						hexpand = true,
+						Widget.Label({
+							label = bind(bat, "percentage"):as(function(p)
+								if not p then
+									return "Battery N/A"
+								end
+								return string.format("Battery %.0f%%", p * 100)
+							end),
+							xalign = 0,
+							css = "font-size: 18px; font-weight: bold;",
+						}),
+						Widget.Label({
+							label = bind(cleanup_refs.time_info),
+							xalign = 0,
+							css = "font-size: 14px;",
+						}),
+					}),
+				}),
+			}),
 			Widget.Box({
 				class_name = "battery-info-container",
 				orientation = "VERTICAL",
 				spacing = 10,
 				hexpand = true,
-				BatteryInfo(),
+				BatteryInfo(cleanup_refs),
 			}),
-			PowerProfile(on_destroy_ref),
+			PowerProfile(cleanup_refs),
 			ConservationMode(),
 			Settings(close_window),
 		}),
-		on_destroy = function()
-			if on_destroy_ref.time_info then
-				on_destroy_ref.time_info:drop()
-			end
-			if on_destroy_ref.profile_var then
-				on_destroy_ref.profile_var:drop()
-			end
-			if on_destroy_ref.auto_profile then
-				on_destroy_ref.auto_profile:drop()
-			end
-		end,
 	})
+
+	if cleanup_refs.conservation_var then
+		astal.monitor_file(CONSERVATION_MODE_PATH, function(_, event)
+			if event == "CHANGED" and not is_destroyed then
+				cleanup_refs.conservation_var:set(getConservationMode())
+			end
+		end)
+	end
 
 	return window
 end

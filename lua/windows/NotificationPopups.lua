@@ -17,8 +17,14 @@ end
 local function NotificationMap(parent)
 	local notifications = Variable({})
 	local notif_map = {}
+	local timer_vars = {}
+	local subscriptions = {}
+	local is_destroyed = false
 
 	local function update_notifications()
+		if is_destroyed then
+			return
+		end
 		local arr = {}
 		for _, widget in pairs(notif_map) do
 			table.insert(arr, widget)
@@ -27,6 +33,24 @@ local function NotificationMap(parent)
 	end
 
 	local function remove_notification(id)
+		if is_destroyed then
+			return
+		end
+
+		if timer_vars[id] then
+			pcall(function()
+				timer_vars[id]:drop()
+			end)
+			timer_vars[id] = nil
+		end
+
+		if subscriptions[id] then
+			pcall(function()
+				subscriptions[id]:unsubscribe()
+			end)
+			subscriptions[id] = nil
+		end
+
 		if notif_map[id] then
 			if notif_map[id].destroy then
 				notif_map[id]:destroy()
@@ -37,26 +61,50 @@ local function NotificationMap(parent)
 	end
 
 	parent:hook(notifd, "notified", function(_, id)
+		if is_destroyed then
+			return
+		end
+
 		local notification = notifd:get_notification(id)
 		if not notification then
 			Debug.error("NotificationPopups", "Failed to get notification with id: %d", id)
 			return
 		end
 
-		local timer_var = Variable(0)
+		local timer = Variable(0)
+		timer_vars[id] = timer
 
 		notif_map[id] = Notification({
 			notification = notification,
 			on_hover_lost = function()
-				remove_notification(id)
-			end,
-			setup = function()
-				timer_var:subscribe(function()
+				if not is_destroyed then
 					remove_notification(id)
+				end
+			end,
+			setup = function(self)
+				if is_destroyed then
+					return
+				end
+
+				subscriptions[id] = timer:subscribe(function()
+					if not is_destroyed then
+						remove_notification(id)
+					end
+				end)
+
+				self:hook(self, "destroy", function()
+					if subscriptions[id] then
+						pcall(function()
+							subscriptions[id]:unsubscribe()
+						end)
+						subscriptions[id] = nil
+					end
 				end)
 
 				timeout(TIMEOUT_DELAY, function()
-					timer_var:set(1)
+					if not is_destroyed and timer_vars[id] then
+						timer:set(1)
+					end
 				end)
 			end,
 		})
@@ -65,7 +113,40 @@ local function NotificationMap(parent)
 	end)
 
 	parent:hook(notifd, "resolved", function(_, id)
-		remove_notification(id)
+		if not is_destroyed then
+			remove_notification(id)
+		end
+	end)
+
+	parent:hook(parent, "destroy", function()
+		is_destroyed = true
+
+		for id, sub in pairs(subscriptions) do
+			pcall(function()
+				sub:unsubscribe()
+			end)
+		end
+		subscriptions = {}
+
+		for id, timer in pairs(timer_vars) do
+			pcall(function()
+				timer:drop()
+			end)
+		end
+		timer_vars = {}
+
+		for id, notif in pairs(notif_map) do
+			if notif.destroy then
+				notif:destroy()
+			end
+		end
+		notif_map = {}
+
+		pcall(function()
+			notifications:drop()
+		end)
+
+		collectgarbage("collect")
 	end)
 
 	return notifications

@@ -217,10 +217,11 @@ function MediaControlWindow.new(gdkmonitor)
 	local Anchor = astal.require("Astal").WindowAnchor
 	local user_vars = require("user-variables")
 	local mpris = Mpris.get_default()
+	local cleanup_refs = {}
+	local is_destroyed = false
 
 	local function get_active_player()
 		if not mpris then
-			Debug.error("MediaControl", "MPRIS not available")
 			return nil
 		end
 
@@ -229,7 +230,6 @@ function MediaControlWindow.new(gdkmonitor)
 		end)
 
 		if not success or not players or #players == 0 then
-			Debug.warning("MediaControl", "No players available")
 			return nil
 		end
 
@@ -255,25 +255,29 @@ function MediaControlWindow.new(gdkmonitor)
 		return nil
 	end
 
-	local window_state = Variable({
+	cleanup_refs.window_state = Variable({
 		player = initial_player,
 		available = true,
 		position = 0,
 		length = initial_player.length or 0,
 	})
 
-	local poll_id = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 1000, function()
+	cleanup_refs.poll_id = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 1000, function()
+		if is_destroyed then
+			return false
+		end
+
 		local current_player = get_active_player()
 		if current_player and current_player.available then
-			if current_player.bus_name ~= window_state:get().player.bus_name then
-				window_state:set({
+			if current_player.bus_name ~= cleanup_refs.window_state:get().player.bus_name then
+				cleanup_refs.window_state:set({
 					player = current_player,
 					available = true,
 					length = current_player.length or 0,
 				})
 			end
 		else
-			window_state:set({
+			cleanup_refs.window_state:set({
 				player = nil,
 				available = false,
 				length = 0,
@@ -282,23 +286,34 @@ function MediaControlWindow.new(gdkmonitor)
 		return true
 	end)
 
-	return Widget.Window({
+	local window = Widget.Window({
 		class_name = "MediaControlWindow",
 		gdkmonitor = gdkmonitor,
 		anchor = Anchor.TOP,
 		setup = function(self)
 			self:hook(self, "destroy", function()
-				if poll_id then
-					GLib.source_remove(poll_id)
+				if is_destroyed then
+					return
 				end
-				window_state:drop()
+				is_destroyed = true
+
+				if cleanup_refs.poll_id then
+					GLib.source_remove(cleanup_refs.poll_id)
+					cleanup_refs.poll_id = nil
+				end
+				if cleanup_refs.window_state then
+					cleanup_refs.window_state:drop()
+					cleanup_refs.window_state = nil
+				end
+				cleanup_refs = nil
+				collectgarbage("collect")
 			end)
 		end,
 		child = Widget.Box({
 			orientation = "VERTICAL",
 			spacing = 15,
 			css = "padding: 20px;",
-			bind(window_state):as(function(state)
+			bind(cleanup_refs.window_state):as(function(state)
 				if not state.available or not state.player then
 					return Widget.Box()
 				end
@@ -325,6 +340,8 @@ function MediaControlWindow.new(gdkmonitor)
 			end),
 		}),
 	})
+
+	return window
 end
 
 return MediaControlWindow

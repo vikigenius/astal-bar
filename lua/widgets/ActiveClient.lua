@@ -75,18 +75,11 @@ local function create_window_variable()
 
 	source_id = GLib.timeout_add(GLib.PRIORITY_DEFAULT, POLL_INTERVAL, poll_callback)
 
-	var.on_drop = function()
-		if source_id then
-			GLib.source_remove(source_id)
-			source_id = nil
-		end
-	end
-
-	return var
+	return var, source_id
 end
 
 return function()
-	local window_var = create_window_variable()
+	local window_var, timer_id = create_window_variable()
 
 	local app_id_transform = function(window)
 		return sanitize_utf8(window.app_id or "Desktop")
@@ -101,6 +94,19 @@ return function()
 
 	return Widget.Box({
 		class_name = "ActiveClient",
+		setup = function(self)
+			self:hook(self, "destroy", function()
+				if timer_id then
+					GLib.source_remove(timer_id)
+					timer_id = nil
+				end
+				window_var:drop()
+				app_id_var:drop()
+				title_var:drop()
+				WindowCache.data = {}
+				WindowCache.timestamp = 0
+			end)
+		end,
 		Widget.Box({
 			orientation = "VERTICAL",
 			Widget.Label({
@@ -115,10 +121,5 @@ return function()
 				ellipsize = "END",
 			}),
 		}),
-		on_destroy = function()
-			window_var:drop()
-			app_id_var:drop()
-			title_var:drop()
-		end,
 	})
 end

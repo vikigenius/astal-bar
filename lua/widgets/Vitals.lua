@@ -33,19 +33,35 @@ local function VitalsWidget()
 		return Widget.Box({})
 	end
 
+	local cleanup_refs = {}
+	local is_destroyed = false
+
+	cleanup_refs.memory = create_metric_widget("memory", "memory-symbolic.svg", vitals.memory_usage)
+	cleanup_refs.cpu = create_metric_widget("cpu", "cpu-symbolic.svg", vitals.cpu_usage)
+
 	return Widget.Box({
 		css = "padding: 0 5pt;",
 		class_name = "Vitals",
 		spacing = 5,
-		create_metric_widget("memory", "memory-symbolic.svg", vitals.memory_usage),
-		create_metric_widget("cpu", "cpu-symbolic.svg", vitals.cpu_usage),
-		on_destroy = function()
-			if vitals.memory_usage then
-				vitals.memory_usage:drop()
-			end
-			if vitals.cpu_usage then
-				vitals.cpu_usage:drop()
-			end
+		cleanup_refs.memory,
+		cleanup_refs.cpu,
+		setup = function(self)
+			self:hook(self, "destroy", function()
+				if is_destroyed then
+					return
+				end
+				is_destroyed = true
+
+				if vitals.memory_usage then
+					vitals.memory_usage:drop()
+				end
+				if vitals.cpu_usage then
+					vitals.cpu_usage:drop()
+				end
+
+				cleanup_refs = nil
+				collectgarbage("collect")
+			end)
 		end,
 	})
 end

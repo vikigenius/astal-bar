@@ -174,42 +174,58 @@ end
 local function create_workspace_variables()
 	local workspace_data = Variable(process_workspace_data())
 	local monitors_var = Variable(get_niri_monitors())
+	local is_destroyed = false
 
 	local workspaces = Variable.derive({ workspace_data, monitors_var }, function(ws_data, monitors)
+		if is_destroyed then
+			return {}
+		end
 		return (ws_data and monitors) and ws_data or {}
 	end)
 
 	local workspace_source = Gio.Cancellable()
 	workspace_data:poll(rate_limiter.workspace_interval, function()
-		if workspace_source:is_cancelled() then
+		if is_destroyed or workspace_source:is_cancelled() then
 			return nil
 		end
-		local data = process_workspace_data()
-		workspace_data:set(data)
-		return data
+		return process_workspace_data()
 	end)
 
 	local monitor_source = Gio.Cancellable()
 	monitors_var:poll(rate_limiter.monitor_interval, function()
-		if monitor_source:is_cancelled() then
+		if is_destroyed or monitor_source:is_cancelled() then
 			return nil
 		end
-		local monitors = get_niri_monitors()
-		monitors_var:set(monitors)
-		return monitors
+		return get_niri_monitors()
 	end)
 
-	return workspace_data, monitors_var, workspaces, workspace_source, monitor_source
+	return {
+		workspace_data = workspace_data,
+		monitors_var = monitors_var,
+		workspaces = workspaces,
+		workspace_source = workspace_source,
+		monitor_source = monitor_source,
+		cleanup = function()
+			is_destroyed = true
+			workspace_source:cancel()
+			monitor_source:cancel()
+			workspace_data:drop()
+			monitors_var:drop()
+			workspaces:drop()
+			cache.monitors.data = {}
+			cache.workspaces.data = {}
+		end,
+	}
 end
 
 return function()
-	local workspace_data, monitors_var, workspaces, workspace_source, monitor_source = create_workspace_variables()
+	local vars = create_workspace_variables()
 
 	return Widget.Box({
 		class_name = "Workspaces",
 		orientation = "HORIZONTAL",
 		spacing = 2,
-		bind(workspaces):as(function(ws)
+		bind(vars.workspaces):as(function(ws)
 			return map(ws, function(monitor)
 				return MonitorWorkspaces({
 					monitor = monitor.monitor,
@@ -218,14 +234,13 @@ return function()
 				})
 			end)
 		end),
-		on_destroy = function()
-			workspace_source:cancel()
-			monitor_source:cancel()
-			workspace_data:drop()
-			monitors_var:drop()
-			workspaces:drop()
-			cache.monitors.data = {}
-			cache.workspaces.data = {}
+		setup = function(self)
+			self:hook(self, "destroy", function()
+				if vars and vars.cleanup then
+					vars.cleanup()
+					vars = nil
+				end
+			end)
 		end,
 	})
 end

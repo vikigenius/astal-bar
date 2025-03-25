@@ -6,6 +6,19 @@ local Debug = require("lua.lib.debug")
 
 local Display = {}
 
+function Display:init_night_light_state()
+	local function check_gammastep_status()
+		local success, ps_out = pcall(exec, "pgrep gammastep")
+		if success and ps_out and ps_out ~= "" then
+			self.night_light_enabled:set(true)
+		else
+			self.night_light_enabled:set(false)
+		end
+	end
+
+	pcall(check_gammastep_status)
+end
+
 function Display:New()
 	local instance = {
 		brightness = Variable.new(tonumber(exec("brightnessctl get")) / 255 or 0.75),
@@ -21,19 +34,6 @@ function Display:New()
 	instance.initialized = true
 
 	return instance
-end
-
-function Display:init_night_light_state()
-	local function check_gammastep_status()
-		local success, ps_out = pcall(exec, "pgrep gammastep")
-		if success and ps_out and ps_out ~= "" then
-			self.night_light_enabled:set(true)
-		else
-			self.night_light_enabled:set(false)
-		end
-	end
-
-	pcall(check_gammastep_status)
 end
 
 function Display:set_brightness(value)
@@ -76,6 +76,10 @@ function Display:toggle_night_light()
 	end)
 
 	GLib.timeout_add(GLib.PRIORITY_DEFAULT, 200, function()
+		if not self.initialized then
+			return GLib.SOURCE_REMOVE
+		end
+
 		if new_state then
 			self:apply_night_light()
 		else
@@ -83,7 +87,11 @@ function Display:toggle_night_light()
 				GLib.spawn_command_line_async("gammastep -x")
 			end)
 		end
-		self.night_light_enabled:set(new_state)
+
+		if self.night_light_enabled then
+			self.night_light_enabled:set(new_state)
+		end
+
 		return GLib.SOURCE_REMOVE
 	end)
 end
@@ -119,28 +127,32 @@ function Display:set_night_light_temp(value)
 end
 
 function Display:cleanup()
-	if self.brightness then
-		self.brightness:drop()
-	end
-	if self.night_light_enabled then
-		self.night_light_enabled:drop()
-	end
-	if self.night_light_temp then
-		self.night_light_temp:drop()
-	end
 	if self.update_timeout then
 		GLib.source_remove(self.update_timeout)
 		self.update_timeout = nil
 	end
-	if self.night_light_enabled:get() then
+
+	if self.night_light_enabled and self.night_light_enabled:get() then
 		pcall(function()
 			GLib.spawn_command_line_async("pkill gammastep")
-		end)
-		GLib.timeout_add(GLib.PRIORITY_DEFAULT, 100, function()
 			GLib.spawn_command_line_async("gammastep -x")
-			return GLib.SOURCE_REMOVE
 		end)
 	end
+
+	if self.brightness then
+		self.brightness:drop()
+		self.brightness = nil
+	end
+	if self.night_light_enabled then
+		self.night_light_enabled:drop()
+		self.night_light_enabled = nil
+	end
+	if self.night_light_temp then
+		self.night_light_temp:drop()
+		self.night_light_temp = nil
+	end
+
+	self.initialized = false
 end
 
 local instance = nil

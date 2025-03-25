@@ -281,7 +281,6 @@ function DisplayControlWindow.new(gdkmonitor)
 		setup = function(self)
 			self:hook(self, "destroy", function()
 				Debug.debug("DisplayControl", "Cleaning up DisplayControlWindow")
-				local display = Display.get_default()
 				if display then
 					display:cleanup()
 				end

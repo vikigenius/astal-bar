@@ -47,24 +47,38 @@ local function SysTray()
 end
 
 local function Media(monitor)
+	local MEDIA_HIDE_DELAY = 30
 	local window_visible = Variable(false)
-	local is_visible = Variable(true)
 	local hover_state = Variable(false)
+	local is_destroyed = false
+	local hide_timer = nil
+	local player_info
 
 	local user_vars = require("user-variables")
 	local preferred_players = user_vars.media and user_vars.media.preferred_players or {}
 
 	local mpris = Mpris.get_default()
 
+	local function safe_destroy_window()
+		if media_window then
+			local win = media_window
+			media_window = nil
+			GLib.idle_add(GLib.PRIORITY_DEFAULT, function()
+				if win then
+					win:destroy()
+				end
+				return false
+			end)
+		end
+	end
+
 	local function get_active_player()
 		if not mpris then
-			Debug.error("Media", "MPRIS not available")
 			return nil
 		end
 
 		local players = mpris.players
 		if not players then
-			Debug.warning("Media", "No players available")
 			return nil
 		end
 
@@ -78,12 +92,16 @@ local function Media(monitor)
 		return nil
 	end
 
-	local player_info = Variable({
+	player_info = Variable({
 		title = nil,
 		cover = nil,
 		playing = false,
 		active = false,
 	}):poll(2000, function()
+		if is_destroyed then
+			return nil
+		end
+
 		local result = {
 			title = nil,
 			cover = nil,
@@ -93,24 +111,51 @@ local function Media(monitor)
 
 		local player = get_active_player()
 		if player and player.available then
+			local is_playing = false
+			pcall(function()
+				is_playing = (player.playback_status == "PLAYING")
+			end)
+
 			result.active = true
 			pcall(function()
 				result.title = player.title
 			end)
-
 			pcall(function()
 				result.cover = player.cover_art or player.art_url
 			end)
 
-			pcall(function()
-				result.playing = (player.playback_status == "PLAYING")
-			end)
+			if is_playing then
+				if hide_timer then
+					GLib.source_remove(hide_timer)
+					hide_timer = nil
+				end
+				result.playing = true
+			else
+				result.playing = false
+				if not hide_timer then
+					hide_timer = GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, MEDIA_HIDE_DELAY, function()
+						if not is_destroyed then
+							result.active = false
+							player_info:set(result)
+							safe_destroy_window()
+						end
+						hide_timer = nil
+						return false
+					end)
+				end
+			end
+		else
+			safe_destroy_window()
 		end
 
 		return result
 	end)
 
 	local function toggle_media_window()
+		if is_destroyed then
+			return
+		end
+
 		if window_visible:get() and media_window then
 			media_window:hide()
 			window_visible:set(false)
@@ -121,26 +166,27 @@ local function Media(monitor)
 			end
 			if media_window then
 				media_window:show_all()
+				window_visible:set(true)
 			end
-			window_visible:set(true)
 		end
 	end
 
 	return Widget.Box({
 		class_name = "media-container",
 		visible = bind(player_info):as(function(info)
-			return info.active
+			return info and info.active
 		end),
 		setup = function(self)
 			self:hook(self, "destroy", function()
+				is_destroyed = true
+				if hide_timer then
+					GLib.source_remove(hide_timer)
+					hide_timer = nil
+				end
+				safe_destroy_window()
 				player_info:drop()
-				is_visible:drop()
 				window_visible:drop()
 				hover_state:drop()
-				if media_window then
-					media_window:destroy()
-					media_window = nil
-				end
 			end)
 		end,
 		Widget.EventBox({
@@ -150,11 +196,15 @@ local function Media(monitor)
 			above_child = true,
 			on_button_press_event = toggle_media_window,
 			on_enter_notify_event = function()
-				hover_state:set(true)
+				if not is_destroyed then
+					hover_state:set(true)
+				end
 				return true
 			end,
 			on_leave_notify_event = function()
-				hover_state:set(false)
+				if not is_destroyed then
+					hover_state:set(false)
+				end
 				return true
 			end,
 			child = Widget.Box({
@@ -166,7 +216,7 @@ local function Media(monitor)
 					height_request = 24,
 					valign = "CENTER",
 					css = bind(player_info):as(function(info)
-						if info.cover then
+						if info and info.cover then
 							return string.format("background-image: url('%s'); background-size: cover;", info.cover)
 						end
 						return "background-color: #555555;"
@@ -178,7 +228,7 @@ local function Media(monitor)
 					reveal_child = bind(hover_state),
 					child = Widget.Label({
 						label = bind(player_info):as(function(info)
-							return info.title or ""
+							return (info and info.title) or ""
 						end),
 						ellipsize = "END",
 						max_width_chars = 20,

@@ -26,4 +26,7 @@ return {
 			"firefox",
 		},
 	},
+	display = {
+		night_light_temp_initial = 3500,
+	},
 }

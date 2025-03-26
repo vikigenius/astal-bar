@@ -94,7 +94,6 @@ local function QuickToggles()
 		hexpand = true,
 		setup = function(self)
 			self:hook(self, "destroy", function()
-				Debug.debug("DisplayControl", "Cleaning up QuickToggles variables")
 				for _, var in pairs(vars) do
 					if var then
 						var:drop()
@@ -280,7 +279,6 @@ function DisplayControlWindow.new(gdkmonitor)
 		anchor = Anchor.TOP + Anchor.RIGHT,
 		setup = function(self)
 			self:hook(self, "destroy", function()
-				Debug.debug("DisplayControl", "Cleaning up DisplayControlWindow")
 				if display then
 					display:cleanup()
 				end

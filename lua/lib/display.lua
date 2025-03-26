@@ -3,6 +3,7 @@ local Variable = astal.Variable
 local exec = astal.exec
 local GLib = astal.require("GLib")
 local Debug = require("lua.lib.debug")
+local UserVariables = require("user-variables")
 
 local Display = {}
 
@@ -20,10 +21,13 @@ function Display:init_night_light_state()
 end
 
 function Display:New()
+	local initial_temp = (UserVariables.display and UserVariables.display.night_light_temp_initial) or 3500
+	local normalized_temp = (initial_temp - 2500) / 4000
+
 	local instance = {
 		brightness = Variable.new(tonumber(exec("brightnessctl get")) / 255 or 0.75),
 		night_light_enabled = Variable.new(false),
-		night_light_temp = Variable.new(0.6),
+		night_light_temp = Variable.new(normalized_temp),
 		update_timeout = nil,
 		initialized = false,
 	}

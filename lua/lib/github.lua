@@ -21,6 +21,9 @@ local state = {
 	cache = {
 		last_cleanup = 0,
 		last_viewed = 0,
+		loaded = false,
+		data = nil,
+		timestamp = 0,
 	},
 }
 
@@ -62,22 +65,33 @@ local function execute_curl(cmd)
 end
 
 local function load_cache()
+	if state.cache.loaded then
+		return state.cache.data, state.cache.timestamp
+	end
+
 	Debug.debug("GitHub", "Loading cached events")
 	if not GLib.file_test(CACHE_FILE, "EXISTS") then
-		return nil
+		state.cache.loaded = true
+		return nil, 0
 	end
 
 	local content = astal.read_file(CACHE_FILE)
 	if not content then
-		return nil
+		state.cache.loaded = true
+		return nil, 0
 	end
 
 	local decoded_ok, cache = pcall(cjson.decode, content)
 	if not decoded_ok or type(cache) ~= "table" then
-		return nil
+		state.cache.loaded = true
+		return nil, 0
 	end
 
-	return cache.events, cache.last_update or 0
+	state.cache.data = cache.events
+	state.cache.timestamp = cache.last_update or 0
+	state.cache.loaded = true
+
+	return state.cache.data, state.cache.timestamp
 end
 
 local function save_cache(events)
@@ -111,6 +125,10 @@ local function save_cache(events)
 		pcall(os.remove, temp_file)
 		return false
 	end
+
+	state.cache.data = events
+	state.cache.timestamp = cache.last_update
+
 	return true
 end
 
@@ -201,13 +219,17 @@ local function fetch_github_events(username, attempt)
 end
 
 function Github.get_events()
-	local cached_events, last_update = load_cache()
+	return load_cache()
+end
 
-	if cached_events then
-		return cached_events, last_update
-	end
-
-	return Github.update_events()
+function Github.update_events_async(callback)
+	GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, function()
+		local events, timestamp = Github.update_events()
+		if callback then
+			callback(events, timestamp)
+		end
+		return false
+	end)
 end
 
 function Github.update_events()
@@ -215,7 +237,7 @@ function Github.update_events()
 
 	if os.time() - state.rate.error_time < RATE_LIMIT_COOLDOWN then
 		Debug.warn("GitHub", "In rate limit cooldown")
-		return {}, 0
+		return load_cache()
 	end
 
 	local username = user_vars.github and user_vars.github.username or "linuxmobile"
@@ -227,12 +249,15 @@ function Github.update_events()
 		return events, current_time
 	end
 
-	return {}, 0
+	return load_cache()
 end
 
 function Github.get_last_update_time()
+	if state.cache.loaded then
+		return state.cache.timestamp
+	end
 	local _, timestamp = load_cache()
-	return timestamp or 0
+	return timestamp
 end
 
 function Github.mark_viewed()
@@ -279,5 +304,7 @@ function Github.format_last_update(timestamp)
 		return string.format("Updated %d days ago", math.floor(diff / 86400))
 	end
 end
+
+load_cache()
 
 return Github

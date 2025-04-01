@@ -5,6 +5,20 @@ local dock_config = require("lua.lib.dock-config")
 local GLib = astal.require("GLib")
 local Debug = require("lua.lib.debug")
 local Variable = astal.Variable
+local Niri = require("lua.lib.niri")
+
+local apps_singleton
+local function get_apps_service()
+	if not apps_singleton then
+		apps_singleton = Apps.Apps.new()
+		if apps_singleton then
+			apps_singleton:reload()
+		else
+			Debug.error("Dock", "Failed to initialize Apps service")
+		end
+	end
+	return apps_singleton
+end
 
 local function DockIcon(props)
 	if not props.icon then
@@ -33,15 +47,6 @@ local function DockIcon(props)
 	})
 end
 
-local apps_singleton = nil
-
-local function get_apps_service()
-	if not apps_singleton then
-		apps_singleton = Apps.Apps.new()
-	end
-	return apps_singleton
-end
-
 local function DockContainer()
 	local apps = get_apps_service()
 	if not apps then
@@ -51,9 +56,10 @@ local function DockContainer()
 
 	local available_apps = {}
 	local pinned_apps = dock_config.pinned_apps
-	local update_timeout = nil
+	local update_pending = false
 	local container_active = true
-	local subscription = nil
+	local windows_var, _, windows_cleanup
+	local subscription
 
 	local function update_dock_icons(self)
 		if not self or not container_active then
@@ -63,8 +69,8 @@ local function DockContainer()
 		local children = self:get_children()
 		if children then
 			for _, child in ipairs(children) do
-				child:destroy()
 				self:remove(child)
+				child:destroy()
 			end
 		end
 
@@ -120,45 +126,67 @@ local function DockContainer()
 
 		pinned_apps = dock_config.pinned_apps
 		update_dock_icons(self)
-		collectgarbage("collect")
 	end
 
-	local container = Widget.Box({
+	local function schedule_update(self)
+		if not self or not container_active or update_pending then
+			return
+		end
+
+		update_pending = true
+		GLib.timeout_add(GLib.PRIORITY_LOW, 100, function()
+			if container_active then
+				update_apps_state(self)
+			end
+			update_pending = false
+			return GLib.SOURCE_REMOVE
+		end)
+	end
+
+	return Widget.Box({
 		class_name = "dock-container",
 		spacing = 8,
 		homogeneous = false,
 		halign = "CENTER",
 		setup = function(self)
-			update_timeout = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 2000, function()
-				if not container_active then
-					return GLib.SOURCE_REMOVE
-				end
-				update_apps_state(self)
-				return GLib.SOURCE_CONTINUE
-			end)
+			windows_var, _, windows_cleanup = Niri.create_window_variable({
+				window_poll_interval = 5000,
+			})
+
+			if windows_var then
+				subscription = windows_var:subscribe(function(_)
+					if container_active then
+						schedule_update(self)
+					end
+				end)
+			end
+
+			update_apps_state(self)
 
 			self:hook(self, "destroy", function()
 				container_active = false
-				if update_timeout then
-					GLib.source_remove(update_timeout)
-					update_timeout = nil
-				end
 
 				if subscription then
-					subscription:unsubscribe()
+					pcall(function()
+						subscription:unsubscribe()
+					end)
 					subscription = nil
+				end
+
+				if windows_cleanup then
+					pcall(function()
+						windows_cleanup()
+					end)
+					windows_cleanup = nil
 				end
 
 				available_apps = {}
 				pinned_apps = nil
+
 				collectgarbage("collect")
 			end)
-
-			update_apps_state(self)
 		end,
 	})
-
-	return container
 end
 
 local function create_revealer(content)
@@ -183,11 +211,11 @@ return function(gdkmonitor)
 
 	local Anchor = astal.require("Astal").WindowAnchor
 	local visible = Variable(true)
-	local hide_timeout = nil
-	local revealer = nil
-	local dock_window = nil
-	local detector_window = nil
-	local subscription = nil
+	local hide_timeout
+	local revealer
+	local dock_window
+	local detector_window
+	local subscription
 
 	local is_cleaned_up = false
 
@@ -197,26 +225,35 @@ return function(gdkmonitor)
 		end
 		is_cleaned_up = true
 
-		if hide_timeout then
-			GLib.source_remove(hide_timeout)
+		if hide_timeout and tonumber(hide_timeout) > 0 then
+			pcall(function()
+				GLib.source_remove(hide_timeout)
+			end)
 			hide_timeout = nil
 		end
 
 		if subscription then
-			subscription:unsubscribe()
+			pcall(function()
+				subscription:unsubscribe()
+			end)
 			subscription = nil
 		end
 
 		if visible then
-			visible:drop()
+			pcall(function()
+				visible:drop()
+			end)
 		end
 
 		if detector_window then
-			detector_window:destroy()
+			pcall(function()
+				detector_window:destroy()
+			end)
 			detector_window = nil
 		end
 
 		revealer = nil
+
 		collectgarbage("collect")
 	end
 
@@ -225,20 +262,21 @@ return function(gdkmonitor)
 			return
 		end
 
-		if hide_timeout then
-			GLib.source_remove(hide_timeout)
+		if hide_timeout and tonumber(hide_timeout) > 0 then
+			pcall(function()
+				GLib.source_remove(hide_timeout)
+			end)
 			hide_timeout = nil
 		end
 
-		if visible then
-			visible:set(true)
-		end
+		visible:set(true)
 	end
 
 	local function hide_dock()
 		if is_cleaned_up or not visible then
 			return
 		end
+
 		visible:set(false)
 	end
 
@@ -247,8 +285,11 @@ return function(gdkmonitor)
 			return
 		end
 
-		if hide_timeout then
-			GLib.source_remove(hide_timeout)
+		if hide_timeout and tonumber(hide_timeout) > 0 then
+			pcall(function()
+				GLib.source_remove(hide_timeout)
+			end)
+			hide_timeout = nil
 		end
 
 		hide_timeout = GLib.timeout_add(GLib.PRIORITY_DEFAULT, delay or 500, function()
@@ -257,6 +298,8 @@ return function(gdkmonitor)
 			return GLib.SOURCE_REMOVE
 		end)
 	end
+
+	local dock_container = DockContainer()
 
 	dock_window = Widget.Window({
 		class_name = "Dock",
@@ -277,9 +320,7 @@ return function(gdkmonitor)
 				end
 			end)
 
-			self:hook(self, "destroy", function()
-				cleanup()
-			end)
+			self:hook(self, "destroy", cleanup)
 		end,
 		Widget.EventBox({
 			on_hover_lost = function()
@@ -291,7 +332,6 @@ return function(gdkmonitor)
 				halign = "CENTER",
 				hexpand = false,
 				setup = function(self)
-					local dock_container = DockContainer()
 					if dock_container then
 						revealer = create_revealer(dock_container)
 						if revealer then
@@ -314,7 +354,8 @@ return function(gdkmonitor)
 	})
 
 	detector_window:show_all()
-	schedule_hide(1000)
+
+	schedule_hide(1500)
 
 	return dock_window
 end

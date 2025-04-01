@@ -52,7 +52,7 @@ window.SysInfoWindow {
         border-left: to-rem(1px) solid gtkalpha($border, 0.1);
 
         .info-label {
-          color: $subtext1;
+          color: $overlay2;
           font-size: to-rem(14px);
         }
 

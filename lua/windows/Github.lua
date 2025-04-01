@@ -96,6 +96,36 @@ local function EventItem(props, close_window)
 	})
 end
 
+local function process_events(github_events)
+	if not github_events then
+		Debug.warn("GitHub", "Failed to process events: empty data")
+		return { error = true }
+	end
+	if #github_events == 0 then
+		Debug.debug("GitHub", "No events received from API")
+		return { empty = true }
+	end
+
+	local result = {}
+	for i, event in ipairs(github_events) do
+		if event.actor and event.repo then
+			result[i] = {
+				type = format_event_type(event.type),
+				actor = event.actor.login,
+				repo = format_repo_name(event.repo),
+				time = Github.format_time(event.created_at),
+				avatar_url = event.actor.avatar_url,
+				url = "https://github.com/" .. event.repo.name,
+			}
+		end
+	end
+
+	if #result == 0 then
+		return { empty = true }
+	end
+	return result
+end
+
 local GithubWindow = {}
 
 function GithubWindow.new(gdkmonitor)
@@ -105,37 +135,27 @@ function GithubWindow.new(gdkmonitor)
 	local window
 	local first_map = true
 
+	local cached_events, cached_timestamp = Github.get_events()
+	local has_valid_cache = cached_events and #cached_events > 0
+
 	local function close_window()
 		if window and not is_destroyed then
 			window:hide()
 		end
 	end
 
-	cleanup_refs.events_var = Variable.new({ loading = true })
-	cleanup_refs.last_update_var = Variable.new("")
-	cleanup_refs.is_loading_var = Variable.new(true)
-	cleanup_refs.update_label_visible = Variable.new(false)
-
-	local function process_events(github_events)
-		if not github_events then
-			Debug.warn("GitHub", "Failed to process events: empty data")
-			return { error = true }
-		end
-		if #github_events == 0 then
-			Debug.debug("GitHub", "No events received from API")
-			return { empty = true }
-		end
-		return map(github_events, function(event)
-			return {
-				type = format_event_type(event.type),
-				actor = event.actor.login,
-				repo = format_repo_name(event.repo),
-				time = Github.format_time(event.created_at),
-				avatar_url = event.actor.avatar_url,
-				url = "https://github.com/" .. event.repo.name,
-			}
-		end)
+	local processed_data
+	if has_valid_cache then
+		processed_data = process_events(cached_events)
+	else
+		processed_data = { loading = true }
 	end
+
+	cleanup_refs.events_var = Variable.new(processed_data)
+	cleanup_refs.last_update_var =
+		Variable.new(cached_timestamp > 0 and Github.format_last_update(cached_timestamp) or "")
+	cleanup_refs.is_loading_var = Variable.new(false)
+	cleanup_refs.update_label_visible = Variable.new(cached_timestamp > 0)
 
 	local function start_update_timer()
 		if cleanup_refs.update_timer_id then
@@ -154,39 +174,12 @@ function GithubWindow.new(gdkmonitor)
 		end)
 	end
 
-	local function load_events()
-		if is_destroyed then
-			return
-		end
-
-		GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, function()
-			if is_destroyed then
-				return false
-			end
-
-			local events, timestamp = Github.get_events()
-			cleanup_refs.events_var:set(process_events(events))
-
-			if timestamp and timestamp > 0 then
-				cleanup_refs.last_update_var:set(Github.format_last_update(timestamp))
-			else
-				cleanup_refs.last_update_var:set("Updated just now")
-			end
-
-			cleanup_refs.update_label_visible:set(true)
-			cleanup_refs.is_loading_var:set(false)
-			start_update_timer()
-			return false
-		end)
-	end
-
-	local function update_events()
-		if is_destroyed then
+	local function refresh_data_async()
+		if is_destroyed or cleanup_refs.is_loading_var:get() then
 			return
 		end
 
 		cleanup_refs.is_loading_var:set(true)
-		cleanup_refs.events_var:set({ loading = true })
 		cleanup_refs.last_update_var:set("Updating...")
 
 		GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, function()
@@ -194,15 +187,23 @@ function GithubWindow.new(gdkmonitor)
 				return false
 			end
 
-			local events, timestamp = Github.update_events()
-			cleanup_refs.events_var:set(process_events(events))
-			cleanup_refs.last_update_var:set(Github.format_last_update(timestamp))
+			local fresh_events, update_timestamp = Github.update_events()
+			local success, new_processed_data = pcall(process_events, fresh_events)
+
+			if success and new_processed_data and not new_processed_data.empty and not new_processed_data.error then
+				cleanup_refs.events_var:set(new_processed_data)
+			end
+
+			cleanup_refs.last_update_var:set(Github.format_last_update(update_timestamp))
+			cleanup_refs.update_label_visible:set(true)
 			cleanup_refs.is_loading_var:set(false)
 			return false
 		end)
 	end
 
-	load_events()
+	if has_valid_cache then
+		start_update_timer()
+	end
 
 	window = Widget.Window({
 		class_name = "GithubWindow",
@@ -243,7 +244,7 @@ function GithubWindow.new(gdkmonitor)
 					}),
 					on_clicked = function()
 						if not cleanup_refs.is_loading_var:get() then
-							update_events()
+							refresh_data_async()
 						end
 					end,
 				}),
@@ -298,25 +299,17 @@ function GithubWindow.new(gdkmonitor)
 			self:hook(self, "map", function()
 				if first_map then
 					first_map = false
-					if Github and type(Github.mark_viewed) == "function" then
-						Github.mark_viewed()
-					end
-
-					local needs_update = false
-					if Github and type(Github.get_last_update_time) == "function" then
-						local last_update = Github.get_last_update_time()
-						local current_time = os.time()
-						needs_update = (last_update == 0 or (current_time - last_update > 1800))
-					end
-
-					if needs_update and not is_destroyed then
-						GLib.timeout_add(GLib.PRIORITY_DEFAULT, 1000, function()
-							if not is_destroyed then
-								update_events()
+					if not has_valid_cache then
+						refresh_data_async()
+					else
+						GLib.idle_add(GLib.PRIORITY_LOW, function()
+							if not is_destroyed and not cleanup_refs.is_loading_var:get() then
+								refresh_data_async()
 							end
 							return false
 						end)
 					end
+					Github.mark_viewed()
 				end
 			end)
 		end,

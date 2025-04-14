@@ -117,65 +117,42 @@ local function parse_fastfetch_data(raw_data)
 			elseif item.type == "Uptime" then
 				local uptime = nil
 
-				if type(item.result.uptime) == "number" then
-					uptime = item.result.uptime
-				elseif type(item.result.uptime) == "string" then
-					uptime = tonumber(item.result.uptime)
-				elseif item.result.seconds then
-					uptime = tonumber(item.result.seconds)
+				if type(item.result) == "table" and type(item.result.uptime) == "number" then
+					uptime = math.floor(item.result.uptime / 1000)
 				end
 
-				if uptime then
-					if uptime > 31536000 then
-						Debug.error("SysInfo", "Unreasonable uptime detected: " .. uptime .. " seconds, adjusting")
-
-						local handle = io.popen("cat /proc/uptime")
-						if handle then
-							local proc_uptime = handle:read("*l")
-							handle:close()
-							if proc_uptime then
-								uptime = tonumber(proc_uptime:match("^%S+"))
-							end
-						end
-
-						if not uptime or uptime > 31536000 then
-							uptime = 0
-							Debug.error("SysInfo", "Failed to get reasonable uptime, defaulting to 0")
+				if not uptime or uptime <= 0 or uptime > 31536000 then
+					local handle = io.popen("cat /proc/uptime")
+					if handle then
+						local proc_uptime = handle:read("*l")
+						handle:close()
+						if proc_uptime then
+							uptime = tonumber(proc_uptime:match("^%S+"))
 						end
 					end
+				end
 
-					local seconds = uptime
-					local days = math.floor(seconds / 86400)
-					seconds = seconds - days * 86400
-					local hours = math.floor(seconds / 3600)
-					seconds = seconds - hours * 3600
-					local minutes = math.floor(seconds / 60)
+				if uptime and uptime > 0 then
+					local days = math.floor(uptime / 86400)
+					local hours = math.floor((uptime % 86400) / 3600)
+					local minutes = math.floor((uptime % 3600) / 60)
 
-					local uptime_text = ""
+					local parts = {}
 					if days > 0 then
-						uptime_text = days .. " day" .. (days > 1 and "s" or "")
-						if hours > 0 or minutes > 0 then
-							uptime_text = uptime_text .. ", "
-						end
+						table.insert(parts, days .. " day" .. (days ~= 1 and "s" or ""))
 					end
-
-					if hours > 0 then
-						uptime_text = uptime_text .. hours .. " hour" .. (hours > 1 and "s" or "")
-						if minutes > 0 then
-							uptime_text = uptime_text .. ", "
-						end
+					if hours > 0 or #parts > 0 then
+						table.insert(parts, hours .. " hour" .. (hours ~= 1 and "s" or ""))
 					end
-
-					if minutes > 0 or (days == 0 and hours == 0) then
-						uptime_text = uptime_text .. minutes .. " minute" .. (minutes > 1 and "s" or "")
+					if minutes > 0 or #parts == 0 then
+						table.insert(parts, minutes .. " minute" .. (minutes ~= 1 and "s" or ""))
 					end
 
 					parsed.uptime = {
 						seconds = uptime,
-						formatted = uptime_text,
+						formatted = table.concat(parts, ", "),
 					}
 				else
-					Debug.error("SysInfo", "Failed to parse uptime from fastfetch data")
 					parsed.uptime = {
 						seconds = 0,
 						formatted = "Unknown",

@@ -6,6 +6,7 @@ local Battery = astal.require("AstalBattery")
 local PowerProfiles = astal.require("AstalPowerProfiles")
 local GLib = astal.require("GLib")
 local Debug = require("lua.lib.debug")
+local Process = astal.require("AstalIO").Process
 
 local CONSERVATION_MODE_PATH = "/sys/devices/pci0000:00/0000:00:14.3/PNP0C09:00/VPC2004:00/conservation_mode"
 
@@ -365,7 +366,7 @@ local function Settings(close_window)
 				if close_window then
 					close_window()
 				end
-				GLib.spawn_command_line_async("env XDG_CURRENT_DESKTOP=GNOME gnome-control-center power")
+				Process.exec_async("env XDG_CURRENT_DESKTOP=GNOME gnome-control-center power")
 			end,
 		}),
 	})

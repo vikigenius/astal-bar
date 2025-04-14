@@ -5,6 +5,7 @@ local Variable = astal.Variable
 local GLib = astal.require("GLib")
 local Network = astal.require("AstalNetwork")
 local Debug = require("lua.lib.debug")
+local Process = astal.require("AstalIO").Process
 
 local network = Network.get_default()
 local wifi = network.wifi
@@ -410,7 +411,7 @@ function NetworkWindow.new(gdkmonitor)
 						hexpand = true,
 						on_clicked = function()
 							close_window()
-							GLib.spawn_command_line_async("env XDG_CURRENT_DESKTOP=GNOME gnome-control-center wifi")
+							Process.exec_async("env XDG_CURRENT_DESKTOP=GNOME gnome-control-center wifi")
 						end,
 					}),
 				}),

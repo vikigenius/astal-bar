@@ -6,8 +6,8 @@ local GLib = astal.require("GLib")
 local Debug = require("lua.lib.debug")
 local Display = require("lua.lib.display")
 local Theme = require("lua.lib.theme")
-local exec = astal.exec
 local Anchor = astal.require("Astal").WindowAnchor
+local Process = astal.require("AstalIO").Process
 
 local function BrightnessControl()
 	local display = Display.get_default()
@@ -228,7 +228,7 @@ local function Settings(close_window)
 				if close_window then
 					close_window()
 				end
-				GLib.spawn_command_line_async("env XDG_CURRENT_DESKTOP=GNOME gnome-control-center display")
+				Process.exec_async("env XDG_CURRENT_DESKTOP=GNOME gnome-control-center display")
 			end,
 		}),
 	})
@@ -261,7 +261,7 @@ function DisplayControlWindow.new(gdkmonitor)
 
 	local function monitor_handler()
 		if display and display.initialized and display.night_light_enabled:get() then
-			local proc_success, ps_out = pcall(exec, "pgrep gammastep")
+			local proc_success, ps_out = pcall(Process.exec, "pgrep gammastep")
 			if not (proc_success and ps_out and ps_out ~= "") then
 				display:apply_night_light()
 			end

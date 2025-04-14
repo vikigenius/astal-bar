@@ -6,6 +6,7 @@ local Gtk = astal.require("Gtk")
 local Wp = astal.require("AstalWp")
 local Variable = astal.Variable
 local Debug = require("lua.lib.debug")
+local Process = astal.require("AstalIO").Process
 
 local function create_volume_control(type, cleanup_refs, is_destroyed)
 	local audio = Wp.get_default().audio
@@ -369,7 +370,7 @@ function AudioControlWindow.new(gdkmonitor)
 					hexpand = true,
 					on_clicked = function()
 						close_window()
-						GLib.spawn_command_line_async("env XDG_CURRENT_DESKTOP=GNOME gnome-control-center sound")
+						Process.exec_async("env XDG_CURRENT_DESKTOP=GNOME gnome-control-center sound")
 					end,
 				}),
 			}),

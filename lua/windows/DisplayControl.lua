@@ -6,23 +6,17 @@ local GLib = astal.require("GLib")
 local Debug = require("lua.lib.debug")
 local Display = require("lua.lib.display")
 local Theme = require("lua.lib.theme")
+local exec = astal.exec
+local Anchor = astal.require("Astal").WindowAnchor
 
 local function BrightnessControl()
 	local display = Display.get_default()
-	local brightness_var = Variable.derive({ display.brightness }, function(val)
-		return string.format("%.0f%%", val * 100)
-	end)
 
 	return Widget.Box({
 		class_name = "brightness-card",
 		orientation = "VERTICAL",
 		spacing = 12,
 		hexpand = true,
-		setup = function(self)
-			self:hook(self, "destroy", function()
-				brightness_var:drop()
-			end)
-		end,
 		Widget.Box({
 			orientation = "HORIZONTAL",
 			spacing = 10,
@@ -60,7 +54,9 @@ local function BrightnessControl()
 				value = display.brightness:get(),
 				on_value_changed = function(self)
 					local value = self:get_value()
-					display:set_brightness(value)
+					if display and display.set_brightness then
+						display:set_brightness(value)
+					end
 				end,
 			}),
 			Widget.Icon({
@@ -74,6 +70,7 @@ end
 local function QuickToggles()
 	local display = Display.get_default()
 	local theme = Theme.get_default()
+
 	local vars = {
 		night_light_class = Variable.derive({ display.night_light_enabled }, function(enabled)
 			return enabled and "quick-toggle night-light active" or "quick-toggle night-light"
@@ -251,7 +248,6 @@ function DisplayControlWindow.new(gdkmonitor)
 		return nil
 	end
 
-	local Anchor = astal.require("Astal").WindowAnchor
 	local window
 	local is_closing = false
 
@@ -263,23 +259,13 @@ function DisplayControlWindow.new(gdkmonitor)
 		end
 	end
 
-	local function handle_monitor_change()
-		GLib.timeout_add(GLib.PRIORITY_DEFAULT, 500, function()
-			if display and display.initialized and display.night_light_enabled:get() then
+	local function monitor_handler()
+		if display and display.initialized and display.night_light_enabled:get() then
+			local proc_success, ps_out = pcall(exec, "pgrep gammastep")
+			if not (proc_success and ps_out and ps_out ~= "") then
 				display:apply_night_light()
 			end
-			return GLib.SOURCE_REMOVE
-		end)
-	end
-
-	local function SectionContainer(widget)
-		return Widget.Box({
-			class_name = "section-container",
-			orientation = "VERTICAL",
-			spacing = 12,
-			hexpand = true,
-			widget,
-		})
+		end
 	end
 
 	window = Widget.Window({
@@ -287,8 +273,7 @@ function DisplayControlWindow.new(gdkmonitor)
 		gdkmonitor = gdkmonitor,
 		anchor = Anchor.TOP + Anchor.RIGHT,
 		setup = function(self)
-			self:hook(self, "map", handle_monitor_change)
-
+			self:hook(self, "map", monitor_handler)
 			self:hook(self, "destroy", function()
 				if display then
 					display:cleanup()
@@ -301,8 +286,20 @@ function DisplayControlWindow.new(gdkmonitor)
 			spacing = 16,
 			css = "padding: 20px;",
 			hexpand = true,
-			SectionContainer(BrightnessControl()),
-			SectionContainer(QuickToggles()),
+			Widget.Box({
+				class_name = "section-container",
+				orientation = "VERTICAL",
+				spacing = 12,
+				hexpand = true,
+				BrightnessControl(),
+			}),
+			Widget.Box({
+				class_name = "section-container",
+				orientation = "VERTICAL",
+				spacing = 12,
+				hexpand = true,
+				QuickToggles(),
+			}),
 			Widget.Box({ vexpand = true }),
 			Settings(close_window),
 		}),

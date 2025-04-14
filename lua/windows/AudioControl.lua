@@ -1,7 +1,6 @@
 local astal = require("astal")
 local Widget = require("astal.gtk3.widget")
 local bind = astal.bind
-local GLib = astal.require("GLib")
 local Gtk = astal.require("Gtk")
 local Wp = astal.require("AstalWp")
 local Variable = astal.Variable
@@ -21,8 +20,9 @@ local function create_volume_control(type, cleanup_refs, is_destroyed)
 		return Widget.Box({})
 	end
 
-	local device_volume = Variable(device.volume * 100)
-	local device_mute = Variable(device.mute)
+	local current_volume = math.floor((device.volume or 0) * 100)
+	local device_volume = Variable(current_volume)
+	local device_mute = Variable(device.mute or false)
 	cleanup_refs["device_volume_" .. type] = device_volume
 	cleanup_refs["device_mute_" .. type] = device_mute
 
@@ -61,7 +61,7 @@ local function create_volume_control(type, cleanup_refs, is_destroyed)
 		hexpand = true,
 		width_request = 200,
 		orientation = Gtk.Orientation.HORIZONTAL,
-		value = device_volume:get(),
+		value = current_volume,
 		adjustment = Gtk.Adjustment({
 			lower = 0,
 			upper = 100,
@@ -69,28 +69,26 @@ local function create_volume_control(type, cleanup_refs, is_destroyed)
 			page_increment = 10,
 		}),
 		on_value_changed = function(self)
-			if not device then
+			if not device or is_destroyed then
 				return
 			end
 			local new_value = self:get_value() / 100
 			if new_value >= 0 and new_value <= 1 then
-				_G.AUDIO_CONTROL_UPDATING = true
 				device.volume = new_value
 				device_volume:set(self:get_value())
-				_G.AUDIO_CONTROL_UPDATING = false
 			end
 		end,
 	})
 
-	return Widget.Box({
+	local volume_box = Widget.Box({
 		class_name = type .. "-control",
 		orientation = "VERTICAL",
 		spacing = 8,
 		hexpand = true,
 		setup = function(self)
 			self:hook(device, "notify::volume", function()
-				if not _G.AUDIO_CONTROL_UPDATING and not is_destroyed then
-					local new_value = device.volume * 100
+				if not is_destroyed then
+					local new_value = math.floor(device.volume * 100)
 					device_volume:set(new_value)
 					volume_scale:set_value(new_value)
 				end
@@ -152,6 +150,12 @@ local function create_volume_control(type, cleanup_refs, is_destroyed)
 			}),
 		}),
 	})
+
+	if device.volume then
+		volume_scale:set_value(current_volume)
+	end
+
+	return volume_box
 end
 
 local function create_device_list(devices, icon_name)
@@ -231,7 +235,6 @@ function AudioControlWindow.new(gdkmonitor)
 					return
 				end
 				is_destroyed = true
-
 				for _, ref in pairs(cleanup_refs) do
 					if type(ref) == "table" and ref.drop then
 						ref:drop()

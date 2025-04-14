@@ -1,7 +1,8 @@
 local astal = require("astal")
 local Apps = astal.require("AstalApps")
-local cjson = require("cjson")
 local Debug = require("lua.lib.debug")
+local State = require("lua.lib.state")
+local Niri = require("lua.lib.niri")
 
 local M = {}
 local apps = Apps.Apps.new()
@@ -11,6 +12,8 @@ end
 
 M.pinned_apps = {}
 M.running_apps = {}
+local window_callback = nil
+local is_initialized = false
 
 local config_path = debug.getinfo(1).source:match("@?(.*/)") .. "../../user-variables.lua"
 local success, user_vars = pcall(loadfile, config_path)
@@ -51,27 +54,14 @@ local function find_desktop_entry(name)
 	return nil
 end
 
-local function get_running_windows()
-	local out, err = astal.exec("niri msg --json windows")
-	if err then
-		Debug.error("DockConfig", "Failed to get window list: %s", err)
-		return {}
+local function safe_set_state(name, value)
+	if State.get(name) then
+		State.set(name, value)
 	end
-
-	local success, windows = pcall(function()
-		return cjson.decode(out)
-	end)
-
-	if not success then
-		Debug.error("DockConfig", "Failed to parse window list")
-		return {}
-	end
-
-	return windows or {}
 end
 
 function M.update_running_apps()
-	local windows = get_running_windows()
+	local windows = Niri.get_all_windows()
 	local running = {}
 	local app_list = apps:get_list()
 	if not app_list then
@@ -98,6 +88,7 @@ function M.update_running_apps()
 	end
 
 	M.running_apps = running
+	safe_set_state("dock_running_apps", running)
 end
 
 function M.initialize_pinned_apps(pinned_apps)
@@ -114,6 +105,8 @@ function M.initialize_pinned_apps(pinned_apps)
 			table.insert(M.pinned_apps, desktop_entry)
 		end
 	end
+
+	safe_set_state("dock_pinned_apps", M.pinned_apps)
 end
 
 function M.is_running(desktop_entry)
@@ -129,10 +122,33 @@ function M.is_pinned(desktop_entry)
 	return false
 end
 
-M.initialize_pinned_apps()
+function M.setup_listeners()
+	if window_callback then
+		return
+	end
 
-astal.interval(2000, function()
-	M.update_running_apps()
-end)
+	window_callback = Niri.register_window_callback(M.update_running_apps)
+end
+
+function M.init()
+	if is_initialized then
+		return
+	end
+
+	M.initialize_pinned_apps()
+
+	if State.get("dock_enabled") then
+		M.setup_listeners()
+	end
+
+	is_initialized = true
+end
+
+function M.cleanup()
+	if window_callback then
+		window_callback.unregister()
+		window_callback = nil
+	end
+end
 
 return M

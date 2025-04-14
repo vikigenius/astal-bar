@@ -1,9 +1,9 @@
 local astal = require("astal")
 local cjson = require("cjson")
 local GLib = require("lgi").GLib
-local Gio = require("lgi").Gio
 local Debug = require("lua.lib.debug")
 local Variable = astal.Variable
+local utils = require("lua.lib.utils")
 
 local DEFAULT_CONFIG = {
 	monitor_order = { "eDP-1", "HDMI-A-1" },
@@ -25,18 +25,27 @@ local rate_limiter = {
 	last_window_fetch = 0,
 }
 
+local window_event_handlers = {}
+local window_watcher_source_id = nil
+
 local function exec_niri_cmd(cmd)
 	local full_cmd = "niri msg --json " .. cmd
 	local out, err = astal.exec(full_cmd)
+
 	if err then
 		Debug.error("Niri", "Failed to execute niri command: %s, error: %s", full_cmd, err)
-		return nil, err
+		return nil
+	end
+
+	if not out or out == "" then
+		Debug.debug("Niri", "Empty output from niri command: %s (this may be normal)", cmd)
+		return nil
 	end
 
 	local success, data = pcall(cjson.decode, out)
 	if not success then
-		Debug.error("Niri", "Failed to decode JSON from niri command: %s", cmd)
-		return nil, "JSON decode error"
+		Debug.error("Niri", "Failed to decode JSON from niri command: %s, output: %s", cmd, out)
+		return nil
 	end
 
 	return data
@@ -143,31 +152,25 @@ local function process_workspaces(config)
 	return workspace_data
 end
 
-local function get_active_window(config)
-	config = config or DEFAULT_CONFIG
-	local current_time = GLib.get_monotonic_time()
-	local threshold = config.window_debounce_threshold or DEFAULT_CONFIG.window_debounce_threshold
+local function get_active_window()
+	local window = exec_niri_cmd("focused-window")
 
-	if (current_time - cache.windows.timestamp) < threshold then
-		return cache.windows.data
+	if window == nil then
+		return { app_id = "Desktop", title = "niri" }
 	end
 
-	local windows = exec_niri_cmd("windows")
-	if not windows then
-		return cache.windows.data
-	end
-
-	for _, window in ipairs(windows) do
-		if window.is_focused then
-			cache.windows.data = window
-			cache.windows.timestamp = current_time
-			return window
+	if type(window) ~= "table" then
+		local type_str = type(window)
+		if type_str == "userdata" then
+			return { app_id = "Desktop", title = "niri" }
 		end
+		Debug.error("Niri", "Focused window has unexpected format: %s, type: %s", tostring(window), type_str)
+		return { app_id = "Desktop", title = "niri" }
 	end
 
-	cache.windows.data = {}
-	cache.windows.timestamp = current_time
-	return cache.windows.data
+	cache.windows.data = window
+	cache.windows.timestamp = GLib.get_monotonic_time()
+	return window
 end
 
 local function get_all_windows()
@@ -175,14 +178,70 @@ local function get_all_windows()
 	return windows or {}
 end
 
-local function switch_to_workspace(workspace_index, monitor_name)
-	local cmd = string.format("niri msg action switch-to-workspace-index %d %s", workspace_index - 1, monitor_name)
-	local _, err = astal.exec(cmd)
-	if err then
-		Debug.error("Niri", "Failed to switch workspace: %s", err)
-		return false
+local function perform_action(action, ...)
+	local args = { ... }
+	local cmd_args = action
+
+	for _, arg in ipairs(args) do
+		cmd_args = cmd_args .. " " .. tostring(arg)
 	end
-	return true
+
+	local full_cmd = string.format("niri msg action %s", cmd_args)
+	local out, err = astal.exec(full_cmd)
+
+	if err then
+		Debug.error("Niri", "Failed to perform action: %s, error: %s", action, err)
+		return false, err
+	end
+
+	return true, out
+end
+
+local function register_window_callback(callback)
+	if not callback or type(callback) ~= "function" then
+		return nil
+	end
+
+	table.insert(window_event_handlers, callback)
+
+	if not window_watcher_source_id and #window_event_handlers == 1 then
+		local last_windows_hash = ""
+
+		window_watcher_source_id = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 300, function()
+			local windows = get_all_windows()
+
+			local hash = ""
+			for _, window in ipairs(windows) do
+				hash = hash .. (window.app_id or "") .. (window.is_focused and "1" or "0")
+			end
+
+			if hash ~= last_windows_hash then
+				last_windows_hash = hash
+
+				for _, handler in ipairs(window_event_handlers) do
+					handler(windows)
+				end
+			end
+
+			return GLib.SOURCE_CONTINUE
+		end)
+	end
+
+	local function unregister()
+		for i, handler in ipairs(window_event_handlers) do
+			if handler == callback then
+				table.remove(window_event_handlers, i)
+				break
+			end
+		end
+
+		if #window_event_handlers == 0 and window_watcher_source_id then
+			GLib.source_remove(window_watcher_source_id)
+			window_watcher_source_id = nil
+		end
+	end
+
+	return { unregister = unregister }
 end
 
 local function create_workspace_variables(config)
@@ -199,35 +258,45 @@ local function create_workspace_variables(config)
 		return (ws_data and monitors) and ws_data or {}
 	end)
 
-	local workspace_source = Gio.Cancellable()
-	workspace_data:poll(config.workspace_poll_interval or DEFAULT_CONFIG.workspace_poll_interval, function()
-		if is_destroyed or workspace_source:is_cancelled() then
-			return nil
+	local workspace_source = nil
+	workspace_source = GLib.timeout_add(
+		GLib.PRIORITY_DEFAULT,
+		config.workspace_poll_interval or DEFAULT_CONFIG.workspace_poll_interval,
+		function()
+			if is_destroyed then
+				return GLib.SOURCE_REMOVE
+			end
+			workspace_data:set(process_workspaces(config))
+			return GLib.SOURCE_CONTINUE
 		end
-		return process_workspaces(config)
-	end)
+	)
 
-	local monitor_source = Gio.Cancellable()
-	monitors_var:poll(config.monitor_poll_interval or DEFAULT_CONFIG.monitor_poll_interval, function()
-		if is_destroyed or monitor_source:is_cancelled() then
-			return nil
+	local monitor_source = nil
+	monitor_source = GLib.timeout_add(
+		GLib.PRIORITY_DEFAULT,
+		config.monitor_poll_interval or DEFAULT_CONFIG.monitor_poll_interval,
+		function()
+			if is_destroyed then
+				return GLib.SOURCE_REMOVE
+			end
+			monitors_var:set(get_monitors(config))
+			return GLib.SOURCE_CONTINUE
 		end
-		return get_monitors(config)
-	end)
+	)
 
 	return {
 		workspace_data = workspace_data,
 		monitors_var = monitors_var,
 		workspaces = workspaces,
-		workspace_source = workspace_source,
-		monitor_source = monitor_source,
 		cleanup = function()
 			is_destroyed = true
-			if workspace_source and workspace_source.cancel then
-				workspace_source:cancel()
+			if workspace_source then
+				GLib.source_remove(workspace_source)
+				workspace_source = nil
 			end
-			if monitor_source and monitor_source.cancel then
-				monitor_source:cancel()
+			if monitor_source then
+				GLib.source_remove(monitor_source)
+				monitor_source = nil
 			end
 			workspace_data:drop()
 			monitors_var:drop()
@@ -240,30 +309,51 @@ end
 
 local function create_window_variable(config)
 	config = config or DEFAULT_CONFIG
-	local var = Variable({})
+	local var = Variable({ app_id = "Desktop", title = "niri" })
 	local source_id
+	local window_callback = nil
 	local is_cleaned_up = false
 
-	local function poll_callback()
-		if is_cleaned_up then
-			return GLib.SOURCE_REMOVE
+	local function safe_get_window()
+		local ok, window = pcall(get_active_window)
+		if not ok or window == nil or type(window) ~= "table" then
+			Debug.debug("Niri", "No active window or invalid data, using default")
+			return { app_id = "Desktop", title = "niri" }
 		end
-		var:set(get_active_window(config))
-		return GLib.SOURCE_CONTINUE
+		return window
 	end
 
+	window_callback = register_window_callback(utils.debounce(function()
+		if not is_cleaned_up then
+			var:set(safe_get_window())
+		end
+	end, 50))
+
 	source_id = GLib.timeout_add(
-		GLib.PRIORITY_DEFAULT,
+		GLib.PRIORITY_LOW,
 		config.window_poll_interval or DEFAULT_CONFIG.window_poll_interval,
-		poll_callback
+		function()
+			if is_cleaned_up then
+				return GLib.SOURCE_REMOVE
+			end
+			var:set(safe_get_window())
+			return GLib.SOURCE_CONTINUE
+		end
 	)
 
 	local function cleanup()
 		is_cleaned_up = true
+
+		if window_callback then
+			window_callback.unregister()
+			window_callback = nil
+		end
+
 		if source_id then
 			GLib.source_remove(source_id)
 			source_id = nil
 		end
+
 		var:drop()
 		cache.windows.data = {}
 		cache.windows.timestamp = 0
@@ -277,14 +367,26 @@ local function reset_caches()
 		cache.monitors.data[k] = nil
 	end
 	cache.monitors.timestamp = 0
+
 	for k in pairs(cache.workspaces.data) do
 		cache.workspaces.data[k] = nil
 	end
 	cache.workspaces.hash = ""
+
 	for k in pairs(cache.windows.data) do
 		cache.windows.data[k] = nil
 	end
 	cache.windows.timestamp = 0
+end
+
+local function cleanup_all()
+	if window_watcher_source_id then
+		GLib.source_remove(window_watcher_source_id)
+		window_watcher_source_id = nil
+	end
+
+	window_event_handlers = {}
+	reset_caches()
 end
 
 return {
@@ -292,10 +394,12 @@ return {
 	get_workspaces = process_workspaces,
 	get_active_window = get_active_window,
 	get_all_windows = get_all_windows,
-	switch_to_workspace = switch_to_workspace,
+	perform_action = perform_action,
 	create_workspace_variables = create_workspace_variables,
 	create_window_variable = create_window_variable,
+	register_window_callback = register_window_callback,
 	reset_caches = reset_caches,
+	cleanup = cleanup_all,
 	exec_cmd = exec_niri_cmd,
 	DEFAULT_CONFIG = DEFAULT_CONFIG,
 }

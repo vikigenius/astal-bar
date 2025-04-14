@@ -18,7 +18,7 @@ return {
 		specific_monitor = 1,
 	},
 	profile = {
-		picture = os.getenv("HOME") .. "/Downloads/pxArt(1).png",
+		picture = os.getenv("HOME") .. "/Downloads/fastfetch/greenish/fastfech.png",
 	},
 	media = {
 		preferred_players = {

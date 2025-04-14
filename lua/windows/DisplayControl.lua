@@ -263,6 +263,15 @@ function DisplayControlWindow.new(gdkmonitor)
 		end
 	end
 
+	local function handle_monitor_change()
+		GLib.timeout_add(GLib.PRIORITY_DEFAULT, 500, function()
+			if display and display.initialized and display.night_light_enabled:get() then
+				display:apply_night_light()
+			end
+			return GLib.SOURCE_REMOVE
+		end)
+	end
+
 	local function SectionContainer(widget)
 		return Widget.Box({
 			class_name = "section-container",
@@ -278,6 +287,8 @@ function DisplayControlWindow.new(gdkmonitor)
 		gdkmonitor = gdkmonitor,
 		anchor = Anchor.TOP + Anchor.RIGHT,
 		setup = function(self)
+			self:hook(self, "map", handle_monitor_change)
+
 			self:hook(self, "destroy", function()
 				if display then
 					display:cleanup()

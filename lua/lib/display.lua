@@ -11,9 +11,21 @@ function Display:init_night_light_state()
 	local function check_gammastep_status()
 		local success, ps_out = pcall(exec, "pgrep gammastep")
 		if success and ps_out and ps_out ~= "" then
+			local _, cmdline = pcall(exec, "ps -o args= -p " .. ps_out:gsub("%s+", ""))
+			local temp = cmdline and cmdline:match("-O%s*(%d+)")
+
+			if temp then
+				temp = tonumber(temp)
+				self.actual_temp = temp
+				local normalized = (temp - 2500) / 4000
+				self.night_light_temp:set(normalized)
+			end
+
 			self.night_light_enabled:set(true)
+			return true
 		else
 			self.night_light_enabled:set(false)
+			return false
 		end
 	end
 
@@ -28,8 +40,10 @@ function Display:New()
 		brightness = Variable.new(tonumber(exec("brightnessctl get")) / 255 or 0.75),
 		night_light_enabled = Variable.new(false),
 		night_light_temp = Variable.new(normalized_temp),
+		actual_temp = initial_temp,
 		update_timeout = nil,
 		initialized = false,
+		night_light_pid = nil,
 	}
 	setmetatable(instance, self)
 	self.__index = self
@@ -61,10 +75,28 @@ function Display:apply_night_light()
 	if not self.initialized then
 		return
 	end
-	local temp = math.floor(2500 + (self.night_light_temp:get() * 4000))
+
+	self.actual_temp = math.floor(2500 + (self.night_light_temp:get() * 4000))
+
 	pcall(function()
-		GLib.spawn_command_line_async(string.format("gammastep -O %d", temp))
+		GLib.spawn_command_line_sync("pkill gammastep")
 	end)
+
+	local success, _, pid, stderr = pcall(function()
+		return GLib.spawn_command_line_async(string.format("gammastep -O %d", self.actual_temp))
+	end)
+
+	if not success or stderr then
+		Debug.error("Display", "Failed to start gammastep: %s", stderr or "unknown error")
+	else
+		self.night_light_pid = pid
+
+		local state_file = io.open(GLib.get_user_cache_dir() .. "/astal-bar-nightlight", "w")
+		if state_file then
+			state_file:write(string.format("%d\n%d", 1, self.actual_temp))
+			state_file:close()
+		end
+	end
 end
 
 function Display:toggle_night_light()
@@ -75,29 +107,23 @@ function Display:toggle_night_light()
 
 	local new_state = not self.night_light_enabled:get()
 
-	pcall(function()
-		GLib.spawn_command_line_async("pkill gammastep")
-	end)
+	if new_state then
+		self:apply_night_light()
+		self.night_light_enabled:set(true)
+	else
+		pcall(function()
+			GLib.spawn_command_line_sync("pkill gammastep")
+			GLib.spawn_command_line_async("gammastep -x")
+		end)
 
-	GLib.timeout_add(GLib.PRIORITY_DEFAULT, 200, function()
-		if not self.initialized then
-			return GLib.SOURCE_REMOVE
+		local state_file = io.open(GLib.get_user_cache_dir() .. "/astal-bar-nightlight", "w")
+		if state_file then
+			state_file:write("0\n0")
+			state_file:close()
 		end
 
-		if new_state then
-			self:apply_night_light()
-		else
-			pcall(function()
-				GLib.spawn_command_line_async("gammastep -x")
-			end)
-		end
-
-		if self.night_light_enabled then
-			self.night_light_enabled:set(new_state)
-		end
-
-		return GLib.SOURCE_REMOVE
-	end)
+		self.night_light_enabled:set(false)
+	end
 end
 
 function Display:set_night_light_temp(value)
@@ -115,19 +141,34 @@ function Display:set_night_light_temp(value)
 		end
 
 		self.update_timeout = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 150, function()
-			pcall(function()
-				GLib.spawn_command_line_async("pkill gammastep")
-			end)
-			GLib.timeout_add(GLib.PRIORITY_DEFAULT, 50, function()
-				self:apply_night_light()
-				return GLib.SOURCE_REMOVE
-			end)
+			self:apply_night_light()
 			self.update_timeout = nil
 			return GLib.SOURCE_REMOVE
 		end)
 	end
 
 	return true
+end
+
+function Display:restore_from_state()
+	local state_file = io.open(GLib.get_user_cache_dir() .. "/astal-bar-nightlight", "r")
+	if state_file then
+		local enabled = tonumber(state_file:read("*line") or "0")
+		local temp = tonumber(state_file:read("*line") or "3500")
+		state_file:close()
+
+		if enabled == 1 and temp >= 2500 and temp <= 6500 then
+			self.actual_temp = temp
+			local normalized = (temp - 2500) / 4000
+			self.night_light_temp:set(normalized)
+
+			local success, ps_out = pcall(exec, "pgrep gammastep")
+			if not (success and ps_out and ps_out ~= "") then
+				self.night_light_enabled:set(true)
+				self:apply_night_light()
+			end
+		end
+	end
 end
 
 function Display:cleanup()
@@ -137,10 +178,11 @@ function Display:cleanup()
 	end
 
 	if self.night_light_enabled and self.night_light_enabled:get() then
-		pcall(function()
-			GLib.spawn_command_line_async("pkill gammastep")
-			GLib.spawn_command_line_async("gammastep -x")
-		end)
+		local state_file = io.open(GLib.get_user_cache_dir() .. "/astal-bar-nightlight", "w")
+		if state_file then
+			state_file:write(string.format("%d\n%d", 1, self.actual_temp))
+			state_file:close()
+		end
 	end
 
 	if self.brightness then
@@ -163,6 +205,7 @@ local instance = nil
 function Display.get_default()
 	if not instance then
 		instance = Display:New()
+		instance:restore_from_state()
 	end
 	return instance
 end

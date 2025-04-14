@@ -18,6 +18,19 @@ local function getConservationMode()
 	return tonumber(content) == 1
 end
 
+local function setConservationMode(enabled)
+	local value = enabled and "1" or "0"
+	local success, stderr, status =
+		GLib.spawn_command_line_sync("sudo -n sh -c 'echo " .. value .. " > " .. CONSERVATION_MODE_PATH .. "'")
+
+	if not success or status ~= 0 then
+		Debug.error("Battery", "Failed to set conservation mode: %s", stderr or "Unknown error")
+		return false
+	end
+
+	return true
+end
+
 local function getBatteryDevice()
 	local upower = Battery.UPower.new()
 	if not upower then
@@ -276,20 +289,17 @@ local function ConservationMode()
 		hexpand = true,
 		on_clicked = function(self)
 			local new_state = not conservation_var:get()
-			local value = new_state and "1" or "0"
 
-			astal.write_file_async(CONSERVATION_MODE_PATH, value, function(err)
-				if err then
-					Debug.error("Battery", "Failed to set conservation mode: %s", err)
-					updateButtonState(self)
+			if setConservationMode(new_state) then
+				conservation_var:set(new_state)
+				if new_state then
+					self:get_style_context():add_class("active")
 				else
-					if new_state then
-						self:get_style_context():add_class("active")
-					else
-						self:get_style_context():remove_class("active")
-					end
+					self:get_style_context():remove_class("active")
 				end
-			end)
+			else
+				Debug.error("Battery", "Failed to change conservation mode. Make sure your user has sudo privileges.")
+			end
 		end,
 		child = Widget.Box({
 			orientation = "HORIZONTAL",

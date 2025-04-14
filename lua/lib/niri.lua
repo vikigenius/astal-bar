@@ -244,6 +244,37 @@ local function register_window_callback(callback)
 	return { unregister = unregister }
 end
 
+local function register_window_state_callback(callback)
+	local last_state = {}
+	return register_window_callback(function(windows)
+		local current_state = {}
+		for _, window in ipairs(windows) do
+			if window.app_id then
+				current_state[window.app_id] = true
+			end
+		end
+
+		local changed = false
+		for app_id in pairs(current_state) do
+			if not last_state[app_id] then
+				changed = true
+				break
+			end
+		end
+		for app_id in pairs(last_state) do
+			if not current_state[app_id] then
+				changed = true
+				break
+			end
+		end
+
+		if changed then
+			last_state = current_state
+			callback(current_state)
+		end
+	end)
+end
+
 local function create_workspace_variables(config)
 	config = config or DEFAULT_CONFIG
 	local is_destroyed = false
@@ -397,7 +428,7 @@ return {
 	perform_action = perform_action,
 	create_workspace_variables = create_workspace_variables,
 	create_window_variable = create_window_variable,
-	register_window_callback = register_window_callback,
+	register_window_state_callback = register_window_state_callback,
 	reset_caches = reset_caches,
 	cleanup = cleanup_all,
 	exec_cmd = exec_niri_cmd,

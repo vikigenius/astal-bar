@@ -16,26 +16,21 @@ local window_callback = nil
 local is_initialized = false
 
 local config_path = debug.getinfo(1).source:match("@?(.*/)") .. "../../user-variables.lua"
-local success, user_vars = pcall(loadfile, config_path)
-if not success or not user_vars then
-	Debug.error("DockConfig", "Failed to load config file: %s", config_path)
-	return M
+local user_vars = {}
+local success, loaded_vars = pcall(loadfile, config_path)
+if success and loaded_vars then
+	user_vars = loaded_vars() or {}
 end
 
-user_vars = user_vars()
-if not user_vars then
-	Debug.error("DockConfig", "Failed to execute config file")
-	return M
-end
-
-astal.monitor_file(config_path, function(_, _)
-	local new_config = loadfile(config_path)()
-	if new_config and new_config.dock and new_config.dock.pinned_apps then
-		M.initialize_pinned_apps(new_config.dock.pinned_apps)
-	end
-end)
+local default_pinned_apps = { "firefox", "kitty" }
+local configured_pinned_apps = (user_vars.dock and user_vars.dock.pinned_apps) or default_pinned_apps
 
 local function find_desktop_entry(name)
+	if not apps then
+		Debug.error("DockConfig", "Apps service not available")
+		return nil
+	end
+
 	local app_list = apps:get_list()
 	if not app_list then
 		Debug.error("DockConfig", "Failed to get application list")
@@ -60,25 +55,20 @@ local function safe_set_state(name, value)
 	end
 end
 
-function M.update_running_apps()
-	local windows = Niri.get_all_windows()
+local function update_running_apps(window_state)
 	local running = {}
 	local app_list = apps:get_list()
+
 	if not app_list then
-		Debug.error("DockConfig", "Failed to get application list for running apps")
 		return
 	end
 
-	for _, window in ipairs(windows) do
-		if window.app_id then
-			for _, app in ipairs(app_list) do
+	for _, app in ipairs(app_list) do
+		if app and app.entry then
+			for app_id in pairs(window_state) do
 				if
-					app
-					and app.entry
-					and (
-						app.entry:lower():match(window.app_id:lower())
-						or (app.wm_class and app.wm_class:lower():match(window.app_id:lower()))
-					)
+					app.entry:lower():match(app_id:lower())
+					or (app.wm_class and app.wm_class:lower():match(app_id:lower()))
 				then
 					running[app.entry] = true
 					break
@@ -93,7 +83,8 @@ end
 
 function M.initialize_pinned_apps(pinned_apps)
 	M.pinned_apps = {}
-	local apps_to_check = pinned_apps or user_vars.dock.pinned_apps
+	local apps_to_check = pinned_apps or configured_pinned_apps
+
 	if not apps_to_check then
 		Debug.error("DockConfig", "No pinned apps configuration found")
 		return
@@ -126,8 +117,7 @@ function M.setup_listeners()
 	if window_callback then
 		return
 	end
-
-	window_callback = Niri.register_window_callback(M.update_running_apps)
+	window_callback = Niri.register_window_state_callback(update_running_apps)
 end
 
 function M.init()
@@ -136,10 +126,16 @@ function M.init()
 	end
 
 	M.initialize_pinned_apps()
+	M.setup_listeners()
 
-	if State.get("dock_enabled") then
-		M.setup_listeners()
+	local initial_windows = Niri.get_all_windows()
+	local initial_state = {}
+	for _, window in ipairs(initial_windows) do
+		if window.app_id then
+			initial_state[window.app_id] = true
+		end
 	end
+	update_running_apps(initial_state)
 
 	is_initialized = true
 end
@@ -149,6 +145,17 @@ function M.cleanup()
 		window_callback.unregister()
 		window_callback = nil
 	end
+
+	M.running_apps = {}
+	M.pinned_apps = {}
+	is_initialized = false
 end
+
+astal.monitor_file(config_path, function()
+	local new_config = loadfile(config_path)()
+	if new_config and new_config.dock and new_config.dock.pinned_apps then
+		M.initialize_pinned_apps(new_config.dock.pinned_apps)
+	end
+end)
 
 return M

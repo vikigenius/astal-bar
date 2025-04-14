@@ -56,16 +56,55 @@ local function DockContainer()
 
 	local container_active = true
 	local subscription_apps, subscription_running, subscription_pinned
-	local update_timer
+	local visibility_subscription
+	local is_visible = false
 
-	State.create("dock_available_apps", {})
-	State.create("dock_running_apps", dock_config.running_apps)
-	State.create("dock_pinned_apps", dock_config.pinned_apps)
+	local initial_apps = {}
+	local app_list = apps:get_list()
+	if app_list then
+		for _, app in ipairs(app_list) do
+			if app and app.entry then
+				initial_apps[app.entry] = app
+			end
+		end
+	end
+
+	State.create("dock_available_apps", initial_apps)
 	State.create("dock_running_apps", {})
 	State.create("dock_pinned_apps", {})
 
+	dock_config.init()
+
+	local function cleanup_container()
+		container_active = false
+
+		if subscription_apps then
+			subscription_apps:unsubscribe()
+			subscription_apps = nil
+		end
+
+		if subscription_running then
+			subscription_running:unsubscribe()
+			subscription_running = nil
+		end
+
+		if subscription_pinned then
+			subscription_pinned:unsubscribe()
+			subscription_pinned = nil
+		end
+
+		if visibility_subscription then
+			visibility_subscription:unsubscribe()
+			visibility_subscription = nil
+		end
+
+		State.cleanup("dock_available_apps")
+		State.cleanup("dock_running_apps")
+		State.cleanup("dock_pinned_apps")
+	end
+
 	local update_apps_state = utils.debounce(function()
-		if not container_active then
+		if not container_active or not is_visible then
 			return
 		end
 
@@ -82,101 +121,96 @@ local function DockContainer()
 		end
 
 		State.set("dock_available_apps", available)
-	end, 500)
+	end, 1000)
+
+	local render_icons = utils.throttle(function(self)
+		if not self or not container_active then
+			return
+		end
+
+		local available_apps = State.get("dock_available_apps"):get() or {}
+		local pinned_apps = State.get("dock_pinned_apps"):get() or {}
+		local running_apps = State.get("dock_running_apps"):get() or {}
+
+		local children = self:get_children()
+		if children then
+			for _, child in ipairs(children) do
+				self:remove(child)
+				child:destroy()
+			end
+		end
+
+		local icon_box = Widget.Box({
+			spacing = 8,
+			homogeneous = false,
+			halign = "CENTER",
+			hexpand = true,
+		})
+
+		for _, desktop_entry in ipairs(pinned_apps) do
+			local app = available_apps[desktop_entry]
+			if app then
+				icon_box:add(DockIcon({
+					icon = app.icon_name,
+					is_running = running_apps[desktop_entry] or false,
+					desktop_entry = desktop_entry,
+					on_clicked = function()
+						if app.launch then
+							app:launch()
+						end
+					end,
+				}))
+			end
+		end
+
+		for entry, app in pairs(available_apps) do
+			if running_apps[entry] and not dock_config.is_pinned(entry) then
+				icon_box:add(DockIcon({
+					icon = app.icon_name,
+					is_running = true,
+					desktop_entry = entry,
+					on_clicked = function()
+						if app.launch then
+							app:launch()
+						end
+					end,
+				}))
+			end
+		end
+
+		self:add(icon_box)
+	end, 250)
 
 	return Widget.Box({
 		class_name = "dock-container",
 		spacing = 8,
 		homogeneous = false,
 		halign = "CENTER",
+		hexpand = true,
+		width_request = 50,
 		setup = function(self)
-			update_apps_state()
-
-			update_timer = GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, 10, function()
-				if container_active then
+			visibility_subscription = State.subscribe("dock_visible", function(value)
+				is_visible = value
+				if value then
 					update_apps_state()
-					return GLib.SOURCE_CONTINUE
 				end
-				return GLib.SOURCE_REMOVE
 			end)
 
-			local render_icons = function()
-				if not self or not container_active then
-					return
-				end
-
-				local children = self:get_children()
-				if children then
-					for _, child in ipairs(children) do
-						self:remove(child)
-						child:destroy()
-					end
-				end
-
-				local available_apps = State.get("dock_available_apps"):get() or {}
-				local pinned_apps = State.get("dock_pinned_apps"):get() or {}
-				local running_apps = State.get("dock_running_apps"):get() or {}
-
-				for _, desktop_entry in ipairs(pinned_apps) do
-					local app = available_apps[desktop_entry]
-					if app then
-						self:add(DockIcon({
-							icon = app.icon_name,
-							is_running = running_apps[desktop_entry] or false,
-							desktop_entry = desktop_entry,
-							on_clicked = function()
-								if app.launch then
-									app:launch()
-								end
-							end,
-						}))
-					end
-				end
-
-				for entry, app in pairs(available_apps) do
-					if running_apps[entry] and not dock_config.is_pinned(entry) then
-						self:add(DockIcon({
-							icon = app.icon_name,
-							is_running = true,
-							desktop_entry = entry,
-							on_clicked = function()
-								if app.launch then
-									app:launch()
-								end
-							end,
-						}))
-					end
-				end
-			end
-
-			subscription_apps = State.subscribe("dock_available_apps", render_icons)
-			subscription_running = State.subscribe("dock_running_apps", render_icons)
-			subscription_pinned = State.subscribe("dock_pinned_apps", render_icons)
-
-			self:hook(self, "destroy", function()
-				container_active = false
-
-				if subscription_apps then
-					subscription_apps:unsubscribe()
-				end
-				if subscription_running then
-					subscription_running:unsubscribe()
-				end
-				if subscription_pinned then
-					subscription_pinned:unsubscribe()
-				end
-
-				if update_timer then
-					GLib.source_remove(update_timer)
-					update_timer = nil
-				end
-
-				State.cleanup("dock_available_apps")
-				State.cleanup("dock_running_apps")
-				State.cleanup("dock_pinned_apps")
-
-				collectgarbage("collect")
+			subscription_apps = State.subscribe("dock_available_apps", function()
+				render_icons(self)
 			end)
+
+			subscription_running = State.subscribe("dock_running_apps", function()
+				render_icons(self)
+			end)
+
+			subscription_pinned = State.subscribe("dock_pinned_apps", function()
+				render_icons(self)
+			end)
+
+			self:hook(self, "destroy", cleanup_container)
+
+			render_icons(self)
 		end,
 	})
 end
@@ -204,12 +238,12 @@ return function(gdkmonitor)
 	local Anchor = astal.require("Astal").WindowAnchor
 	State.create("dock_enabled", true)
 	State.create("dock_visible", true)
+
 	local hide_timeout
 	local revealer
 	local dock_window
 	local detector_window
 	local subscription
-
 	local is_cleaned_up = false
 
 	local cleanup = utils.safe_cleanup(function()
@@ -236,8 +270,9 @@ return function(gdkmonitor)
 			detector_window = nil
 		end
 
-		revealer = nil
-		collectgarbage("collect")
+		if revealer then
+			revealer = nil
+		end
 	end)
 
 	local show_dock = utils.throttle(function()
@@ -251,14 +286,14 @@ return function(gdkmonitor)
 		end
 
 		State.set("dock_visible", true)
-	end, 100)
+	end, 250)
 
 	local hide_dock = utils.throttle(function()
 		if is_cleaned_up then
 			return
 		end
 		State.set("dock_visible", false)
-	end, 100)
+	end, 250)
 
 	local schedule_hide = function(delay)
 		if is_cleaned_up then

@@ -400,7 +400,19 @@ function BatteryWindow.new(gdkmonitor)
 		return nil
 	end
 
-	cleanup_refs.time_info = Variable.derive({ bind(bat, "state") }, function(state)
+	local time_update_source_id = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 2000, function()
+		if is_destroyed then
+			return false
+		end
+
+		cleanup_refs._refresh_trigger = Variable.derive({ bind(bat, "state") }, function()
+			return true
+		end)
+
+		return true
+	end)
+
+	cleanup_refs.time_info = Variable.derive({ bind(bat, "state"), bind(bat, "energy-rate") }, function(state)
 		if not state then
 			return "Unknown"
 		end
@@ -409,16 +421,26 @@ function BatteryWindow.new(gdkmonitor)
 			return "Conservation mode enabled, waiting to charge"
 		end
 
-		if state == "CHARGING" or state == "DISCHARGING" then
-			local time = state == "CHARGING" and bat:get_time_to_full() or bat:get_time_to_empty()
+		if state == "CHARGING" then
+			local time = bat:get_time_to_full()
 			if not time then
-				return "Calculating..."
+				return "Calculating charge time..."
 			end
 			if time > 0 then
 				return formatTime(time)
 			end
-			return "Calculating..."
+			return "Calculating charge time..."
+		elseif state == "DISCHARGING" then
+			local time = bat:get_time_to_empty()
+			if not time then
+				return "Calculating remaining time..."
+			end
+			if time > 0 then
+				return formatTime(time)
+			end
+			return "Calculating remaining time..."
 		end
+
 		return tostring(state)
 	end)
 
@@ -451,6 +473,11 @@ function BatteryWindow.new(gdkmonitor)
 					return
 				end
 				is_destroyed = true
+
+				if time_update_source_id > 0 then
+					GLib.source_remove(time_update_source_id)
+					time_update_source_id = 0
+				end
 
 				for _, ref in pairs(cleanup_refs) do
 					if type(ref) == "table" and ref.drop then

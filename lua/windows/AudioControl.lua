@@ -65,14 +65,14 @@ local function create_volume_control(type, cleanup_refs, is_destroyed)
 		adjustment = Gtk.Adjustment({
 			lower = 0,
 			upper = 100,
-			step_increment = 1,
-			page_increment = 10,
+			step_increment = 5,
+			page_increment = 5,
 		}),
 		on_value_changed = function(self)
 			if not device or is_destroyed then
 				return
 			end
-			local new_value = self:get_value() / 100
+			local new_value = math.floor(self:get_value() / 5) * 5 / 100
 			if new_value >= 0 and new_value <= 1 then
 				device.volume = new_value
 				device_volume:set(self:get_value())
@@ -88,7 +88,8 @@ local function create_volume_control(type, cleanup_refs, is_destroyed)
 		setup = function(self)
 			self:hook(device, "notify::volume", function()
 				if not is_destroyed then
-					local new_value = math.floor(device.volume * 100)
+					local raw_value = device.volume * 100
+					local new_value = math.floor(raw_value / 5) * 5
 					device_volume:set(new_value)
 					volume_scale:set_value(new_value)
 				end

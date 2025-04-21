@@ -6,6 +6,7 @@ local Gtk = astal.require("Gtk")
 local GLib = astal.require("GLib")
 local Variable = astal.Variable
 local Debug = require("lua.lib.debug")
+local Config = require("lua.lib.config")
 
 local function format_time(seconds)
 	if not seconds or type(seconds) ~= "number" then
@@ -215,7 +216,7 @@ function MediaControlWindow.new(gdkmonitor)
 	end
 
 	local Anchor = astal.require("Astal").WindowAnchor
-	local user_vars = require("user-variables")
+	local user_vars = Config.load_user_config()
 	local mpris = Mpris.get_default()
 	local cleanup_refs = {}
 	local is_destroyed = false

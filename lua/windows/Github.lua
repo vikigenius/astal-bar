@@ -6,6 +6,7 @@ local GLib = astal.require("GLib")
 local map = require("lua.lib.common").map
 local Github = require("lua.lib.github")
 local Debug = require("lua.lib.debug")
+local Config = require("lua.lib.config")
 
 local function format_event_type(type)
 	return type:gsub("Event", ""):lower()

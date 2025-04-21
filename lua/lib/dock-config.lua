@@ -3,7 +3,6 @@ local Apps = astal.require("AstalApps")
 local Debug = require("lua.lib.debug")
 local State = require("lua.lib.state")
 local Niri = require("lua.lib.niri")
-local Config = require("lua.lib.config")
 
 local M = {}
 local apps = Apps.Apps.new()
@@ -16,7 +15,12 @@ M.running_apps = {}
 local window_callback = nil
 local is_initialized = false
 
-local user_vars = Config.load_user_config()
+local config_path = debug.getinfo(1).source:match("@?(.*/)") .. "../../user-variables.lua"
+local user_vars = {}
+local success, loaded_vars = pcall(loadfile, config_path)
+if success and loaded_vars then
+	user_vars = loaded_vars() or {}
+end
 
 local default_pinned_apps = { "firefox", "kitty" }
 local configured_pinned_apps = (user_vars.dock and user_vars.dock.pinned_apps) or default_pinned_apps
@@ -147,18 +151,11 @@ function M.cleanup()
 	is_initialized = false
 end
 
-local function reload_config()
-	local new_config = Config.load_user_config()
+astal.monitor_file(config_path, function()
+	local new_config = loadfile(config_path)()
 	if new_config and new_config.dock and new_config.dock.pinned_apps then
 		M.initialize_pinned_apps(new_config.dock.pinned_apps)
 	end
-end
-
-for _, path in ipairs({
-	(os.getenv("XDG_CONFIG_HOME") or (os.getenv("HOME") .. "/.config")) .. "/kaneru/user-variables.lua",
-	"/etc/kaneru/user-variables.lua",
-}) do
-	astal.monitor_file(path, reload_config)
-end
+end)
 
 return M

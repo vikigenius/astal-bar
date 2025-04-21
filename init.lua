@@ -26,28 +26,7 @@ local css = "/tmp/style.css"
 
 astal.exec("sass " .. scss .. " " .. css)
 
-local function load_user_config()
-	local paths = {
-		(os.getenv("XDG_CONFIG_HOME") or (os.getenv("HOME") .. "/.config")) .. "/kaneru/user-variables.lua",
-		"/etc/kaneru/user-variables.lua",
-		src("user-variables.lua"),
-	}
-
-	for _, path in ipairs(paths) do
-		local file = io.open(path, "r")
-		if file then
-			file:close()
-			local success, result = pcall(dofile, path)
-			if success and result then
-				return result
-			end
-		end
-	end
-
-	return {}
-end
-
-local user_vars = load_user_config()
+local user_vars = loadfile(src("user-variables.lua"))()
 local monitor_config = user_vars.monitor or {
 	mode = "primary",
 	specific_monitor = 1,
@@ -89,6 +68,7 @@ App:start({
 			end
 
 			local windows = {
+				-- desktop = Desktop(monitor),
 				bar = Bar(monitor),
 				dock = Dock(monitor),
 				notifications = NotificationPopups(monitor),

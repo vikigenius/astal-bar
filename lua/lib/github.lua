@@ -2,7 +2,6 @@ local astal = require("astal")
 local cjson = require("cjson")
 local GLib = astal.require("GLib")
 local Debug = require("lua.lib.debug")
-local Config = require("lua.lib.config")
 
 local CACHE_DIR = GLib.get_user_cache_dir() .. "/astal"
 local CACHE_FILE = CACHE_DIR .. "/github-events.json"
@@ -30,7 +29,8 @@ local state = {
 
 local Github = {}
 
-local user_vars = Config.load_user_config()
+local config_path = debug.getinfo(1).source:match("@?(.*/)") .. "../../user-variables.lua"
+local user_vars = loadfile(config_path)()
 
 local function ensure_cache_dir()
 	if not GLib.file_test(CACHE_DIR, "EXISTS") then
@@ -240,7 +240,6 @@ function Github.update_events()
 		return load_cache()
 	end
 
-	user_vars = Config.load_user_config()
 	local username = user_vars.github and user_vars.github.username or "linuxmobile"
 	local events = fetch_github_events(username)
 	local current_time = os.time()
@@ -304,17 +303,6 @@ function Github.format_last_update(timestamp)
 	else
 		return string.format("Updated %d days ago", math.floor(diff / 86400))
 	end
-end
-
-local function reload_config()
-	user_vars = Config.load_user_config()
-end
-
-for _, path in ipairs({
-	(os.getenv("XDG_CONFIG_HOME") or (os.getenv("HOME") .. "/.config")) .. "/kaneru/user-variables.lua",
-	"/etc/kaneru/user-variables.lua",
-}) do
-	astal.monitor_file(path, reload_config)
 end
 
 load_cache()

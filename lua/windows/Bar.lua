@@ -9,7 +9,6 @@ local Network = astal.require("AstalNetwork")
 local Battery = astal.require("AstalBattery")
 local Wp = astal.require("AstalWp")
 local Debug = require("lua.lib.debug")
-local Config = require("lua.lib.config")
 
 local Workspaces = require("lua.widgets.Workspaces")
 local ActiveClient = require("lua.widgets.ActiveClient")
@@ -61,7 +60,7 @@ local function Media(monitor)
 		active = false,
 	})
 
-	local user_vars = Config.load_user_config()
+	local user_vars = require("user-variables")
 	local preferred_players = user_vars.media and user_vars.media.preferred_players or {}
 	local mpris = Mpris.get_default()
 
@@ -197,7 +196,7 @@ local function Media(monitor)
 			return info and info.active and info.playing
 		end),
 		setup = function(self)
-			hide_media()
+			hide_media() -- Start hidden
 			self:hook(self, "destroy", function()
 				is_destroyed = true
 				if hide_timer then
@@ -486,7 +485,7 @@ end
 
 local function SysInfo(monitor)
 	local window_visible = Variable(false)
-	local user_vars = Config.load_user_config()
+	local user_vars = require("user-variables")
 	local profile_pic_path = user_vars.profile and user_vars.profile.picture or nil
 
 	local function toggle_sysinfo_window()

@@ -6,7 +6,7 @@ window.DisplayControlWindow {
   background: transparent;
 
   > box {
-    background-color: $surface0;
+    background-color: $surface3;
     border-radius: to-rem(24px);
     border: to-rem(1px) solid gtkalpha($border, 0.2);
     min-width: to-rem(350px);

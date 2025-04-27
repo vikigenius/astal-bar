@@ -5,8 +5,8 @@ window.Dock {
   transition: all 200ms cubic-bezier(0.4, 0, 0.2, 1);
 
   .dock-wrapper {
-    background-color: gtkalpha($surface0, 0.95);
-    border: to-rem(1px) solid gtkalpha($border, 0.2);
+    background-color: gtkalpha($surface3, 0.96);
+    border: to-rem(2px) solid gtkalpha($border, 0.2);
     border-radius: to-rem(16px);
     padding: to-rem(4px);
     margin: to-rem(10px) to-rem(24px);
@@ -18,7 +18,7 @@ window.Dock {
   &:not(.revealed) .dock-wrapper {
     opacity: 0.5;
     margin-bottom: to-rem(-60px);
-    background-color: gtkalpha($surface0, 0.3);
+    background-color: gtkalpha($surface0, 0.5);
     padding: to-rem(2px);
     min-height: to-rem(4px);
     border-radius: to-rem(2px);
@@ -40,6 +40,7 @@ window.Dock {
     transition: all 200ms cubic-bezier(0.4, 0, 0.2, 1);
     background-color: transparent;
     margin: 0 to-rem(1px);
+    border: to-rem(0px) solid gtkalpha($border, 0.2);
 
     &:hover {
       background-color: gtkalpha($surface1, 0.6);

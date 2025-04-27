@@ -1,12 +1,13 @@
 return {
 	dock = {
 		pinned_apps = {
-			"nautilus",
-			"ghostty",
+			"thunar",
+			"wezterm",
 			"zen",
+      "komikku",
 			"telegram",
 			"obs",
-			"zed",
+			"codium",
 			"resources",
 		},
 	},
@@ -24,6 +25,7 @@ return {
 		preferred_players = {
 			"zen",
 			"firefox",
+      "spotify",
 		},
 	},
 	display = {

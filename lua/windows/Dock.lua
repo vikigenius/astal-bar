@@ -33,7 +33,7 @@ local function DockIcon(props)
 			spacing = 2,
 			Widget.Icon({
 				icon = props.icon or "application-x-executable",
-				pixel_size = 48,
+				pixel_size = 32,
 			}),
 			Widget.Box({
 				class_name = "indicator",

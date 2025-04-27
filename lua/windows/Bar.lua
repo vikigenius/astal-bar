@@ -569,22 +569,23 @@ return function(gdkmonitor)
 		Widget.CenterBox({
 			Widget.Box({
 				halign = "START",
-				class_name = "left-box",
-				ActiveClient(),
+				class_name = "left-box",	
+        ActiveClient(),
+        AudioControl(gdkmonitor),
+				DisplayControl(gdkmonitor),
+				Wifi(gdkmonitor),
 			}),
 			Widget.Box({
 				class_name = "center-box",
-				Workspaces(),
+				
+        Workspaces(),
 				Media(gdkmonitor),
 			}),
 			Widget.Box({
 				class_name = "right-box",
 				halign = "END",
 				GithubActivity(),
-				SysTray(),
-				AudioControl(gdkmonitor),
-				DisplayControl(gdkmonitor),
-				Wifi(gdkmonitor),
+				SysTray(),	
 				BatteryLevel(gdkmonitor),
 				Time("%A %d, %H:%M"),
 				SysInfo(gdkmonitor),

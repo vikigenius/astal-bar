@@ -9,7 +9,7 @@ window.OSDWindow {
 }
 
 .OSD {
-  background-color: gtkalpha($surface0, 0.95);
+  background-color: gtkalpha($surface3, 0.95);
   border-radius: to-rem(24px);
   border: to-rem(1px) solid gtkalpha($border, 0.15);
   margin: to-rem(32px) 0;

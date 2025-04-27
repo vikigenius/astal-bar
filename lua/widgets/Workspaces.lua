@@ -55,7 +55,7 @@ return function()
 	return Widget.Box({
 		class_name = "Workspaces",
 		orientation = "HORIZONTAL",
-		spacing = 2,
+		spacing = 3,
 		bind(vars.workspaces):as(function(ws)
 			local new_widgets = {}
 

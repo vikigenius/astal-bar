@@ -1,0 +1,19 @@
+declare -A focused_colors=(
+  [main]="81a1c1"
+  [green]="a3be8c"
+  [yellow]="ebcb8b"
+  [orange]="E57C46"
+  [red]="bf616a"
+  [pink]="d95d95"
+  [purple]="b48ead"
+)
+
+declare -A unfocused_colors=(
+  [foreground]="d8dee9"
+  [bg-alt]="353C4A"
+  [black]="4c566a"
+  [grey]="4c566a"
+  [red]="bf616a"
+  [green]="a3be8c"
+  [blue]="81a1c1"
+)

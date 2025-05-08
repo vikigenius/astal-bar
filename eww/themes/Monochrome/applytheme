@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+
+echo "Monochrome" > $HOME/.config/hypr/eww/themes/.theme
+$HOME/.config/hypr/eww/themes/theme.sh
+

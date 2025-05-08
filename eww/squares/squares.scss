@@ -1,0 +1,243 @@
+*{
+  all: unset;
+  font-family: JetBrainsMono Nerd Font;
+}
+.winsquare {
+  font-family: JetBrainsMono Nerd Font;
+	min-width: 2120px;
+	min-height: 48px;
+  margin-top: 5px;
+  margin-bottom: 5px;
+  border: 2.5px solid $blue;
+	background: rgba($bg, 0.9);
+  border-radius: 6px;
+}
+.solid-systray {
+  background-color: $bg; /* Nord theme dark - change as needed */
+  opacity: 1;
+  font-family: JetBrainsMono Nerd Font;
+  border-radius: 12px;
+  padding: 6px 10px;
+  font-size: 18px;
+  margin: 6px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 1.0);
+  
+  /* Make absolutely sure nothing is transparent */
+  * {
+    background-color: inherit;
+    opacity: 1;
+    text-shadow: none;
+    -gtk-icon-shadow: none;
+  }
+ /* Item spacing */
+  & > * {
+    margin: 0 6px;
+    padding: 2px;
+    min-width: 24px;
+    min-height: 24px;
+    transition: all 0.2s ease;
+  }
+
+  /* Hover effects */
+  & > *:hover {
+    background-color: #3B4252;
+    border-radius: 6px;
+
+  }
+
+  
+  image {
+    margin: 0 5px;
+    min-width: 22px;
+    min-height: 22px;
+  }
+}
+
+.evenicontermbb {
+	font-size: 25px;
+	color:$fg;
+}
+
+.evenicontermbb:hover {
+	color:$main;
+}
+
+.worksquares {
+	color: $fg;
+	background: $bg-alt;
+	margin-top: 5px;
+	margin-bottom: 5px;
+	margin-left: 5px;
+	min-height: 25px;
+	border-radius: 6px;
+}
+
+.squareselect {
+	color:$bg;
+	font-size: 20px;
+	background: $main;
+	margin-top: 5px;
+	margin-bottom: 5px;
+	margin-left: 5px;
+	min-width:35px;
+	border-radius: 6px;
+}
+
+.squarewselect {
+	color:$bg;
+	background: $main;
+	min-width:35px;
+	border-top-right-radius: 6px;
+	border-bottom-right-radius: 6px;
+}
+
+.boxsquares {
+	color:$fg;
+	background: $bg-alt;
+	margin-top: 5px;
+	margin-bottom: 5px;
+	margin-left: 5px;
+	min-width:35px;
+	border-radius: 6px;
+}
+
+.square {
+	color:$bg;
+	background: $cyan;
+	margin-top: 5px;
+	margin-bottom: 5px;
+	margin-left: 5px;
+	min-width:35px;
+	border-top-left-radius: 6px;
+	border-bottom-left-radius: 6px;
+}
+
+.squares {
+	color:$fg;
+	background: $bg-alt;
+	margin-top: 5px;
+	margin-bottom: 5px;
+	min-width:35px;
+	border-radius: 6px;
+}
+
+
+.squareside {
+	color:$fg;
+	background: $bg-alt;
+	margin-top: 5px;
+	margin-bottom: 5px;
+	min-width:35px;
+	border-top-right-radius: 6px;
+	border-bottom-right-radius: 6px;
+}
+
+.squareclima {
+	color:$bg;
+	font-size: 20px;
+	background: $blue;
+	margin-top: 5px;
+	margin-bottom: 5px;
+	min-width:35px;
+	border-top-left-radius: 6px;
+	border-bottom-left-radius: 6px;
+}
+
+.squaredate {
+	color:$bg;
+	font-size:17px;
+	background: $yellow;
+	margin-top: 5px;
+	margin-bottom: 5px;
+	min-width:35px;
+	border-top-left-radius: 6px;
+	border-bottom-left-radius: 6px;
+}
+
+.squareupda {
+	color:$bg;
+	font-size:17px;
+	background: $orange;
+	margin-top: 5px;
+	margin-bottom: 5px;
+	min-width:35px;
+	border-top-left-radius: 6px;
+	border-bottom-left-radius: 6px;
+}
+
+.squarenet {
+	color:$bg;
+	font-size:17px;
+	background: $pink;
+	margin-top: 5px;
+	margin-bottom: 5px;
+	min-width:35px;
+	border-top-left-radius: 6px;
+	border-bottom-left-radius: 6px;
+}
+
+.squarekey {
+	color:$bg;
+	background: $lime;
+	margin-top: 5px;
+	font-size: 17px;
+	margin-bottom: 5px;
+	min-width:35px;
+	border-top-left-radius: 6px;
+	border-bottom-left-radius: 6px;
+}
+
+.squarevol {
+	color:$bg;
+	background: $purple;
+	margin-top: 5px;
+	margin-bottom: 5px;
+	min-width:35px;
+	border-top-left-radius: 6px;
+	border-bottom-left-radius: 6px;
+}
+
+.squarebat {
+	color:$bg;
+	background: $green;
+	margin-top: 5px;
+	margin-bottom: 5px;
+	min-width:35px;
+	font-size: 17px;
+	border-top-left-radius: 6px;
+	border-bottom-left-radius: 6px;
+}
+
+.squaretemp {
+	color:$bg;
+	background: $red;
+	margin-top: 5px;
+	margin-bottom: 5px;
+	min-width:35px;
+	border-top-left-radius: 6px;
+	border-bottom-left-radius: 6px;
+}
+
+.ws {
+  padding: 6px 10px;
+  border-radius: 6px;
+  margin: 2px;
+  color: #eceff4;
+  font-weight: 500;
+  background-color: #3b4252;
+  transition: all 0.2s ease;
+}
+
+.ws.empty {
+  background-color: #3b4252;
+}
+
+.ws.occupied {
+  background-color: #5e81ac;
+}
+
+.ws.current {
+  border: 2px solid #88c0d0;
+  font-weight: bold;
+  background-color: #81a1c1;
+}

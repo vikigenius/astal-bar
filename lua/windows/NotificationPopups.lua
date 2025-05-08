@@ -163,7 +163,7 @@ return function(gdkmonitor)
 	return Widget.Window({
 		class_name = "NotificationPopups",
 		gdkmonitor = gdkmonitor,
-		anchor = Anchor.TOP + Anchor.RIGHT,
+		anchor = Anchor.TOP ,
 		setup = function(self)
 			local notifs = NotificationMap(self)
 			self:add(Widget.Box({

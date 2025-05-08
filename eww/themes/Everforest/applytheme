@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+
+echo "Everforest" > $HOME/.config/hypr/eww/themes/.theme
+$HOME/.config/hypr/eww/themes/theme.sh

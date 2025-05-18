@@ -541,7 +541,7 @@ return function(gdkmonitor)
 	return Widget.Window({
 		class_name = "Bar",
 		gdkmonitor = gdkmonitor,
-		anchor = Anchor.TOP + Anchor.LEFT + Anchor.RIGHT,
+		anchor = Anchor.BOTTOM + Anchor.LEFT + Anchor.RIGHT,
 		exclusivity = "EXCLUSIVE",
 		on_destroy = function()
 			if github_window then
@@ -570,14 +570,15 @@ return function(gdkmonitor)
 			Widget.Box({
 				halign = "START",
 				class_name = "left-box",	
-        Workspaces(),
-        AudioControl(gdkmonitor),
+			     Workspaces(),
+			     AudioControl(gdkmonitor),
 				DisplayControl(gdkmonitor),
 				Wifi(gdkmonitor),
 			}),
 			Widget.Box({
 				class_name = "center-box",
-				ActiveClient(),
+				halign = "CENTER",
+        ActiveClient(),
 				Media(gdkmonitor),
 			}),
 			Widget.Box({

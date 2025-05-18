@@ -42,11 +42,12 @@
           wget
           curl
           fastfetch
-        ])
-        ++ (with pkgs.lua52Packages; [
-          cjson
-          luautf8
         ]);
+        extraLuaPackages =
+          ps: with ps; [
+            cjson
+            luautf8
+          ];
     };
   };
 }

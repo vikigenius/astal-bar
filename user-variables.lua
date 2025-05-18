@@ -15,7 +15,7 @@ return {
 		username = "linuxmobile",
 	},
 	monitor = {
-		mode = "specific", -- Can be "primary", "all", or "specific"
+		mode = "primary", -- Can be "primary", "all", or "specific"
 		specific_monitor = 1,
 	},
 	profile = {

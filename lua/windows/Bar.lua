@@ -541,7 +541,7 @@ return function(gdkmonitor)
 	return Widget.Window({
 		class_name = "Bar",
 		gdkmonitor = gdkmonitor,
-		anchor = Anchor.BOTTOM + Anchor.LEFT + Anchor.RIGHT,
+		anchor = Anchor.TOP + Anchor.LEFT + Anchor.RIGHT,
 		exclusivity = "EXCLUSIVE",
 		on_destroy = function()
 			if github_window then

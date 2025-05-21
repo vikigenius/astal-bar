@@ -76,6 +76,7 @@
   .systray- {
     button {
       @include button;
+      background-color: gtkalpha($surface0, 1.0);
     }
   }
 

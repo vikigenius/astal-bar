@@ -3,14 +3,14 @@
 @mixin button {
   padding: to-rem(4px) to-rem(16px);
   border-radius: to-rem(50px);
-  background-color: gtkalpha($surface1, 0.6);
+  background-color: gtkalpha($surface1, 1.0);
   color: $text;
   transition: all 200ms ease;
   border: none;
   margin: 0 to-rem(4px);
 
   &:hover {
-    background-color: gtkalpha($surface2, 0.8);
+    background-color: gtkalpha($surface2, 1.0);
   }
 
   icon {

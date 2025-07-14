@@ -45,7 +45,7 @@ end
 
 return function()
 	local config = {
-		monitor_order = { "eDP-1", "HDMI-A-1" },
+		monitor_order = { "DP-1", "HDMI-A-1" },
 		monitor_poll_interval = 5000,
 		workspace_poll_interval = 250,
 	}

@@ -57,7 +57,9 @@ function SysInfoWindow.new(gdkmonitor)
 	local uptime = info.uptime and info.uptime.formatted or "Unknown"
 	local display_compositor = info.display and info.display.compositor or "Unknown"
 
-	local distro_icon = (info.os and info.os.icon_name) or "computer-symbolic"
+	local distro_icon_name = (info.os and info.os.icon_name) or "computer-symbolic"
+	local distro_icons_path = os.getenv("PWD") .. "/icons/"
+	local distro_icon = distro_icons_path .. distro_icon_name .. ".svg"
 
 	return Widget.Window({
 		class_name = "SysInfoWindow",

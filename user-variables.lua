@@ -1,18 +1,9 @@
 return {
 	dock = {
-		pinned_apps = {
-			"thunar",
-			"wezterm",
-			"zen",
-      "komikku",
-			"telegram",
-			"obs",
-			"codium",
-			"resources",
-		},
+		pinned_apps = {},
 	},
 	github = {
-		username = "linuxmobile",
+		username = "vikigenius",
 	},
 	monitor = {
 		mode = "primary", -- Can be "primary", "all", or "specific"
@@ -23,9 +14,8 @@ return {
 	},
 	media = {
 		preferred_players = {
-			"zen",
 			"firefox",
-      "spotify",
+			"spotify",
 		},
 	},
 	display = {

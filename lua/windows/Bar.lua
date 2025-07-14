@@ -12,12 +12,12 @@ local Debug = require("lua.lib.debug")
 
 local Workspaces = require("lua.widgets.Workspaces")
 local ActiveClient = require("lua.widgets.ActiveClient")
-local Vitals = require("lua.widgets.Vitals")
 
 local map = require("lua.lib.common").map
 
 local github_window = nil
 local audio_window = nil
+local calendar_window = nil
 local network_window = nil
 local battery_window = nil
 local display_control_window = nil
@@ -263,7 +263,8 @@ local function Media(monitor)
 	})
 end
 
-local function Time(format)
+local function Time(format, monitor)
+	local window_visible = Variable(false)
 	local time = Variable(""):poll(1000, function()
 		local success, datetime = pcall(function()
 			return GLib.DateTime.new_now_local():format(format)
@@ -271,12 +272,30 @@ local function Time(format)
 		return success and datetime or ""
 	end)
 
-	return Widget.Label({
+	local function toggle_calendar_window()
+		if window_visible:get() and calendar_window then
+			calendar_window:hide()
+			window_visible:set(false)
+		else
+			if not calendar_window then
+				local CalendarWindow = require("lua.windows.CalendarWindow")
+				calendar_window = CalendarWindow.new(monitor)
+			end
+			if calendar_window then
+				calendar_window:show_all()
+			end
+			window_visible:set(true)
+		end
+	end
+
+	return Widget.Button({
 		class_name = "clock-button",
 		label = bind(time),
+		on_clicked = toggle_calendar_window,
 		setup = function(self)
 			self:hook(self, "destroy", function()
 				time:drop()
+				window_visible:drop()
 			end)
 		end,
 	})
@@ -538,57 +557,82 @@ return function(gdkmonitor)
 
 	local Anchor = astal.require("Astal").WindowAnchor
 
+	-- Helper to wrap each widget
+	local function safe_widget(name, func)
+		local ok, result = pcall(func)
+		if not ok or result == nil then
+			Debug.error("Bar", "Widget failed: " .. name .. " -> " .. tostring(result))
+			return Widget.Label({ label = "[ERR:" .. name .. "]" }) -- fallback widget
+		end
+		return result
+	end
+
 	return Widget.Window({
 		class_name = "Bar",
 		gdkmonitor = gdkmonitor,
 		anchor = Anchor.TOP + Anchor.LEFT + Anchor.RIGHT,
 		exclusivity = "EXCLUSIVE",
+
 		on_destroy = function()
-			if github_window then
-				github_window:destroy()
+			local destroy_if_exists = function(window)
+				if window and window.destroy then
+					window:destroy()
+				end
 			end
-			if audio_window then
-				audio_window:destroy()
-			end
-			if network_window then
-				network_window:destroy()
-			end
-			if battery_window then
-				battery_window:destroy()
-			end
-			if display_control_window then
-				display_control_window:destroy()
-			end
-			if sysinfo_window then
-				sysinfo_window:destroy()
-			end
-			if media_window then
-				media_window:destroy()
-			end
+			destroy_if_exists(github_window)
+			destroy_if_exists(audio_window)
+			destroy_if_exists(network_window)
+			destroy_if_exists(battery_window)
+			destroy_if_exists(display_control_window)
+			destroy_if_exists(sysinfo_window)
+			destroy_if_exists(media_window)
 		end,
+
 		Widget.CenterBox({
 			Widget.Box({
 				halign = "START",
-				class_name = "left-box",	
-			     Workspaces(),
-			     AudioControl(gdkmonitor),
-				DisplayControl(gdkmonitor),
-				Wifi(gdkmonitor),
+				class_name = "left-box",
+				safe_widget("Workspaces", function()
+					return Workspaces()
+				end),
+				safe_widget("AudioControl", function()
+					return AudioControl(gdkmonitor)
+				end),
+				-- safe_widget("DisplayControl", function()
+				--	return DisplayControl(gdkmonitor)
+				-- end),
+				safe_widget("Wifi", function()
+					return Wifi(gdkmonitor)
+				end),
 			}),
 			Widget.Box({
 				class_name = "center-box",
 				halign = "CENTER",
-        ActiveClient(),
-				Media(gdkmonitor),
+				safe_widget("ActiveClient", function()
+					return ActiveClient()
+				end),
+				safe_widget("Media", function()
+					return Media(gdkmonitor)
+				end),
 			}),
 			Widget.Box({
 				class_name = "right-box",
 				halign = "END",
-				GithubActivity(),
-				SysTray(),	
-				BatteryLevel(gdkmonitor),
-				Time("%A %d, %H:%M"),
-				SysInfo(gdkmonitor),
+				safe_widget("GithubActivity", function()
+					return GithubActivity()
+				end),
+				safe_widget("SysTray", function()
+					return SysTray()
+				end),
+				safe_widget("BatteryLevel", function()
+					return BatteryLevel(gdkmonitor)
+				end),
+				safe_widget("Time", function()
+					return Time("%A %d, %H:%M", gdkmonitor)
+				end),
+				safe_widget("SysInfo", function()
+					return SysInfo(gdkmonitor)
+				end),
 			}),
 		}),
 	})

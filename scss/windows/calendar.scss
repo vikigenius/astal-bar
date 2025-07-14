@@ -1,0 +1,20 @@
+@use "../abstracts" as *;
+@use "sass:color";
+
+window.CalendarWindow calendar {
+  background-color: $surface1;
+  color: $text;
+  padding: 1px 4px 2px 4px;
+}
+
+window.CalendarWindow calendar:indeterminate {
+  color: $subtext0;
+}
+
+window.CalendarWindow calendar:selected {
+  border-radius: 5px;
+}
+
+window.CalendarWindow calendar:selected:selected {
+  background-color: $overlay2;
+}

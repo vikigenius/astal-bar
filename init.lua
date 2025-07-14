@@ -16,7 +16,7 @@ Debug.info("App", "Components loaded successfully")
 
 Debug.set_config({
 	log_to_file = true,
-	log_to_console = false,
+	log_to_console = true,
 	max_file_size = 1024 * 1024,
 	log_level = Debug.LEVELS.DEBUG,
 })
@@ -69,10 +69,10 @@ App:start({
 
 			local windows = {
 				-- desktop = Desktop(monitor),
-				--bar = Bar(monitor),
-				dock = Dock(monitor),
+				bar = Bar(monitor),
+				-- dock = Dock(monitor),
 				notifications = NotificationPopups(monitor),
-				osd = OSD(monitor),
+				-- osd = OSD(monitor),
 			}
 
 			for name, window in pairs(windows) do
@@ -87,6 +87,7 @@ App:start({
 		end
 
 		if monitor_config.mode == "all" then
+			Debug.info("App", "All monitors")
 			for _, monitor in ipairs(App.monitors) do
 				if not create_windows(monitor) then
 					Debug.error("App", "Failed to create windows for monitor")

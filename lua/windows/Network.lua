@@ -242,7 +242,7 @@ function NetworkWindow.new(gdkmonitor)
 	window = Widget.Window({
 		class_name = "NetworkWindow",
 		gdkmonitor = gdkmonitor,
-		anchor = Anchor.TOP + Anchor.RIGHT,
+		anchor = Anchor.TOP + Anchor.LEFT,
 		width_request = 350,
 		child = Widget.Box({
 			orientation = "VERTICAL",

@@ -6,7 +6,7 @@ local Variable = astal.Variable
 local utils = require("lua.lib.utils")
 
 local DEFAULT_CONFIG = {
-	monitor_order = { "eDP-1", "HDMI-A-1" },
+	monitor_order = { "DP-1", "HDMI-A-1" },
 	monitor_poll_interval = 5000,
 	workspace_poll_interval = 250,
 	window_poll_interval = 450,
